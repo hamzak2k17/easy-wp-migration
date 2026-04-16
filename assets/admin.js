@@ -106,7 +106,35 @@
 					/* 2. Poll ticks. */
 					while ( true ) { // eslint-disable-line no-constant-condition
 						if ( cancelled ) {
-							break;
+							/* Wait for the cancel request to land, then
+							   do one final tick so the server processes
+							   the cancellation and we get confirmation. */
+							await sleep( 1000 );
+
+							try {
+								var cancelProgress = await ajaxPost(
+									'ewpm_job_tick',
+									{ job_id: jobId }
+								);
+
+								if ( onProgress ) {
+									onProgress( cancelProgress );
+								}
+
+								if ( onCancel ) {
+									onCancel( cancelProgress );
+								}
+							} catch ( e ) {
+								/* Best-effort — server may have already
+								   cleaned up. */
+								if ( onCancel ) {
+									onCancel( {
+										cancelled: true,
+										progress_label: 'Job was cancelled.',
+									} );
+								}
+							}
+							return;
 						}
 
 						var progress = await ajaxPost( 'ewpm_job_tick', {
