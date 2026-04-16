@@ -106,47 +106,34 @@
 					/* 2. Poll ticks. */
 					while ( true ) { // eslint-disable-line no-constant-condition
 						if ( cancelled ) {
-							/* Poll progress (read-only) until the server
-							   confirms cancellation, or give up after a
-							   few attempts. Using progress instead of
-							   tick avoids starting another work cycle. */
-							var attempts = 0;
-							var maxAttempts = 10;
+							/* The cancel AJAX request has been sent.
+							   The currently in-flight tick (if any) will
+							   finish naturally. On the next iteration the
+							   base class tick() sees cancel_requested at
+							   the top and returns immediately. We just
+							   need to send that one final tick. */
+							await sleep( 500 );
 
-							while ( attempts < maxAttempts ) {
-								await sleep( 2000 );
-								attempts++;
+							try {
+								var cancelProgress = await ajaxPost(
+									'ewpm_job_tick',
+									{ job_id: jobId }
+								);
 
-								try {
-									var cancelProgress = await ajaxPost(
-										'ewpm_job_progress',
-										{ job_id: jobId }
-									);
-
-									if ( onProgress ) {
-										onProgress( cancelProgress );
-									}
-
-									if ( cancelProgress.cancelled || cancelProgress.done ) {
-										if ( onCancel ) {
-											onCancel( cancelProgress );
-										}
-										return;
-									}
-								} catch ( e ) {
-									/* State file may be gone — treat as
-									   cancelled. */
-									break;
+								if ( onProgress ) {
+									onProgress( cancelProgress );
 								}
-							}
 
-							/* Exhausted attempts — report as cancelled
-							   with last known state. */
-							if ( onCancel ) {
-								onCancel( {
-									cancelled: true,
-									progress_label: 'Job was cancelled.',
-								} );
+								if ( onCancel ) {
+									onCancel( cancelProgress );
+								}
+							} catch ( e ) {
+								if ( onCancel ) {
+									onCancel( {
+										cancelled: true,
+										progress_label: 'Job was cancelled.',
+									} );
+								}
 							}
 							return;
 						}
