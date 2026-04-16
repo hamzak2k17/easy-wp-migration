@@ -163,11 +163,11 @@ $multi = [
 ];
 $input  = 's:14:"http://old.com";';
 $result = EWPM_Serializer_Fix::replace( $input, $multi );
-assert_equal( 's:20:"https://newsite.com";', $result, 'URL replacement with length update' );
+assert_equal( 's:19:"https://newsite.com";', $result, 'URL replacement with length update' );
 
-$input2  = 's:22:"http%3A%2F%2Fold.com";';
+$input2  = 's:20:"http%3A%2F%2Fold.com";';
 $result2 = EWPM_Serializer_Fix::replace( $input2, $multi );
-assert_equal( 's:28:"https%3A%2F%2Fnewsite.com";', $result2, 'URL-encoded replacement with length update' );
+assert_equal( 's:25:"https%3A%2F%2Fnewsite.com";', $result2, 'URL-encoded replacement with length update' );
 
 // ── Test 10: Real WP options-like value ─────────────────────────────
 
