@@ -269,12 +269,15 @@ class EWPM_State {
 			$raw  = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
 			$data = is_string( $raw ) ? json_decode( $raw, true ) : null;
 
-			if ( is_array( $data ) && ! empty( $data['archive_path'] ) ) {
-				$archive_path = (string) $data['archive_path'];
+			// Delete companion files referenced in state (partial archives, SQL dumps).
+			foreach ( [ 'archive_path', 'output_path' ] as $path_key ) {
+				if ( is_array( $data ) && ! empty( $data[ $path_key ] ) ) {
+					$companion = (string) $data[ $path_key ];
 
-				if ( file_exists( $archive_path ) ) {
-					self::assert_path_in_tmp( $archive_path, $real_tmp );
-					@unlink( $archive_path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+					if ( file_exists( $companion ) ) {
+						self::assert_path_in_tmp( $companion, $real_tmp );
+						@unlink( $companion ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+					}
 				}
 			}
 

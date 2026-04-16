@@ -63,6 +63,7 @@ class EWPM_Plugin {
 	private function register_jobs(): void {
 		$registry = EWPM_Job_Registry::instance();
 		$registry->register( 'dummy', EWPM_Job_Dummy::class );
+		$registry->register( 'db_export', EWPM_Job_DB_Export::class );
 	}
 
 	/**

@@ -43,6 +43,29 @@ $job_ids       = $state_manager->list_all();
 		<div id="ewpm-dummy-result"></div>
 	</div>
 
+	<!-- Database Export Test -->
+	<div class="ewpm-dev-section">
+		<h3><?php esc_html_e( 'Database Export Test', 'easy-wp-migration' ); ?></h3>
+
+		<div class="ewpm-dev-controls">
+			<label for="ewpm-dbexport-chunk">
+				<?php esc_html_e( 'Chunk size (rows per query):', 'easy-wp-migration' ); ?>
+			</label>
+			<input type="number" id="ewpm-dbexport-chunk" value="1000" min="100" max="10000" step="100">
+
+			<button type="button" class="button button-primary" id="ewpm-dbexport-start">
+				<?php esc_html_e( 'Start DB Export', 'easy-wp-migration' ); ?>
+			</button>
+
+			<button type="button" class="button ewpm-cancel-btn" id="ewpm-dbexport-cancel" style="display:none;">
+				<?php esc_html_e( 'Cancel', 'easy-wp-migration' ); ?>
+			</button>
+		</div>
+
+		<div id="ewpm-dbexport-progress"></div>
+		<div id="ewpm-dbexport-result"></div>
+	</div>
+
 	<!-- Active Jobs -->
 	<div class="ewpm-dev-section">
 		<h3><?php esc_html_e( 'Active Jobs', 'easy-wp-migration' ); ?></h3>
@@ -166,6 +189,101 @@ $job_ids       = $state_manager->list_all();
 			jobHandle.cancel();
 		}
 	} );
+
+	/* -- Database Export ---------------------------------------------- */
+
+	var dbStartBtn  = document.getElementById( 'ewpm-dbexport-start' );
+	var dbCancelBtn = document.getElementById( 'ewpm-dbexport-cancel' );
+	var dbChunkInput = document.getElementById( 'ewpm-dbexport-chunk' );
+	var dbProgressEl = document.getElementById( 'ewpm-dbexport-progress' );
+	var dbResultEl   = document.getElementById( 'ewpm-dbexport-result' );
+
+	var dbJobHandle = null;
+
+	dbStartBtn.addEventListener( 'click', function () {
+		dbProgressEl.innerHTML = '';
+		dbResultEl.innerHTML   = '';
+		dbStartBtn.disabled    = true;
+		dbCancelBtn.style.display = 'inline-block';
+
+		var chunkSize = parseInt( dbChunkInput.value, 10 ) || 1000;
+
+		dbJobHandle = EWPM.Job.start( {
+			job_type: 'db_export',
+			params: { chunk_size: chunkSize },
+
+			onProgress: function ( data ) {
+				EWPM.UI.renderProgress( dbProgressEl, data );
+			},
+
+			onDone: function ( result ) {
+				dbCancelBtn.style.display = 'none';
+				dbStartBtn.disabled = false;
+
+				var html = '<strong>Export complete!</strong><br>';
+				html += 'Tables: ' + ( result.tables_count || 0 ) + '<br>';
+				html += 'Rows: ' + ( result.rows_count || 0 ).toLocaleString() + '<br>';
+				html += 'Size: ' + formatBytes( result.bytes || 0 ) + '<br>';
+
+				if ( result.warnings && result.warnings.length > 0 ) {
+					html += '<br><strong>Warnings:</strong><br>';
+					result.warnings.forEach( function ( w ) {
+						html += '- ' + escHtml( w ) + '<br>';
+					} );
+				}
+
+				// Build download link using the job_id from the handle.
+				var jobId = dbJobHandle ? dbJobHandle.getJobId() : '';
+				if ( jobId ) {
+					var downloadUrl = window.ewpmData.ajaxUrl
+						+ '?action=ewpm_dev_download_sql'
+						+ '&job_id=' + encodeURIComponent( jobId )
+						+ '&_wpnonce=<?php echo esc_js( wp_create_nonce( 'ewpm_dev_download_sql' ) ); ?>';
+					html += '<br><a href="' + escHtml( downloadUrl ) + '" class="button">Download SQL</a>';
+				}
+
+				dbResultEl.className = 'ewpm-dev-result ewpm-dev-result--success';
+				dbResultEl.innerHTML = html;
+			},
+
+			onError: function ( err ) {
+				dbCancelBtn.style.display = 'none';
+				dbStartBtn.disabled = false;
+				dbResultEl.className = 'ewpm-dev-result ewpm-dev-result--error';
+				dbResultEl.textContent = 'Error: ' + err.message;
+			},
+
+			onCancel: function ( data ) {
+				dbCancelBtn.style.display = 'none';
+				dbStartBtn.disabled = false;
+				EWPM.UI.renderProgress( dbProgressEl, data );
+				dbResultEl.className = 'ewpm-dev-result';
+				dbResultEl.textContent = 'DB export cancelled.';
+			},
+		} );
+	} );
+
+	dbCancelBtn.addEventListener( 'click', function () {
+		if ( dbJobHandle ) {
+			dbJobHandle.cancel();
+		}
+	} );
+
+	/* -- Helpers ------------------------------------------------------ */
+
+	function formatBytes( bytes ) {
+		if ( bytes === 0 ) return '0 B';
+		var k = 1024;
+		var sizes = [ 'B', 'KB', 'MB', 'GB' ];
+		var i = Math.floor( Math.log( bytes ) / Math.log( k ) );
+		return parseFloat( ( bytes / Math.pow( k, i ) ).toFixed( 2 ) ) + ' ' + sizes[ i ];
+	}
+
+	function escHtml( str ) {
+		var div = document.createElement( 'div' );
+		div.appendChild( document.createTextNode( str ) );
+		return div.innerHTML;
+	}
 
 	/* -- Delete State ------------------------------------------------ */
 

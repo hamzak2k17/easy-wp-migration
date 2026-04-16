@@ -5,6 +5,27 @@ All notable changes to Easy WP Migration will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-04-17
+
+### Added
+
+- `EWPM_DB_Exporter` — pure-PHP database dump engine using `$wpdb`, no shell commands
+- Chunked row export with numeric PK cursor pagination (falls back to OFFSET for composite/no PK)
+- Single-row INSERT statements to avoid max_allowed_packet issues on constrained hosts
+- SQL value escaping: NULL, boolean, integer, float (NaN/Inf → NULL), binary (hex literals), multibyte strings
+- Table structure via `SHOW CREATE TABLE` preserving original collation, engine, charset
+- SQL file header/footer with `SET NAMES`, `FOREIGN_KEY_CHECKS` management, charset detection
+- Views, triggers, stored procedures, and events skipped with warnings surfaced in export summary
+- `EWPM_DB_Exporter_Exception` for type-specific database export errors
+- `EWPM_Job_DB_Export` — job framework wrapper for isolated DB export testing (type: `db_export`)
+- Job phases: init (enumerate tables, write header) → dump_tables (chunked row export with time budget) → finalize_sql (write footer) → done
+- Progress reporting: bytes-written vs estimated total, per-table row counters
+- Cancel flag check between tables for responsive mid-export cancellation
+- Cleanup deletes partial SQL file on cancel/error with realpath guard (tmp/ only)
+- Dev Tools: "Database Export Test" section with chunk size control, live progress, cancel, and SQL download
+- Dev-only `ewpm_dev_download_sql` AJAX endpoint streaming completed SQL files via `readfile()`
+- `EWPM_State::cleanup_stale()` now cleans both `archive_path` and `output_path` from stale jobs
+
 ## [0.3.0] — 2026-04-16
 
 ### Added

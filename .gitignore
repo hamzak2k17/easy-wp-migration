@@ -33,3 +33,9 @@ easy-wp-migration-storage/
 
 # Claude Code local config
 .claude/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+node_modules/
+package.json
+package-lock.json

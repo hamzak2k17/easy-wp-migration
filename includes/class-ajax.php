@@ -32,6 +32,7 @@ class EWPM_Ajax {
 		if ( true === EWPM_DEV_MODE ) {
 			add_action( 'wp_ajax_ewpm_dev_delete_state', [ $this, 'handle_dev_delete_state' ] );
 			add_action( 'wp_ajax_ewpm_dev_cleanup', [ $this, 'handle_dev_cleanup' ] );
+			add_action( 'wp_ajax_ewpm_dev_download_sql', [ $this, 'handle_dev_download_sql' ] );
 		}
 	}
 
@@ -192,6 +193,70 @@ class EWPM_Ajax {
 		} catch ( \Exception $e ) {
 			wp_send_json_error( [ 'error' => $e->getMessage() ], 400 );
 		}
+	}
+
+	/**
+	 * Dev-only: stream a completed DB export SQL file for download.
+	 *
+	 * Uses GET params: job_id, _wpnonce.
+	 * Streams with readfile() — does not load file into memory.
+	 */
+	public function handle_dev_download_sql(): void {
+		if ( true !== EWPM_DEV_MODE || ! defined( 'WP_DEBUG' ) || true !== WP_DEBUG ) {
+			wp_die( esc_html__( 'Dev mode is not enabled.', 'easy-wp-migration' ), 403 );
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Insufficient permissions.', 'easy-wp-migration' ), 403 );
+		}
+
+		check_admin_referer( 'ewpm_dev_download_sql' );
+
+		$job_id = sanitize_text_field( wp_unslash( $_GET['job_id'] ?? '' ) );
+
+		if ( empty( $job_id ) ) {
+			wp_die( esc_html__( 'Missing job_id.', 'easy-wp-migration' ), 400 );
+		}
+
+		try {
+			$state_manager = new EWPM_State();
+			$state         = $state_manager->load( $job_id );
+		} catch ( EWPM_State_Exception $e ) {
+			wp_die( esc_html( $e->getMessage() ), 400 );
+		}
+
+		if ( 'db_export' !== ( $state['type'] ?? '' ) ) {
+			wp_die( esc_html__( 'Job is not a database export.', 'easy-wp-migration' ), 400 );
+		}
+
+		if ( empty( $state['done'] ) ) {
+			wp_die( esc_html__( 'Job is not yet complete.', 'easy-wp-migration' ), 400 );
+		}
+
+		$output_path = $state['output_path'] ?? '';
+
+		if ( empty( $output_path ) || ! file_exists( $output_path ) ) {
+			wp_die( esc_html__( 'SQL file not found.', 'easy-wp-migration' ), 404 );
+		}
+
+		// Path safety check.
+		$real_path = realpath( $output_path );
+		$real_tmp  = realpath( ewpm_get_tmp_dir() );
+
+		if ( ! $real_path || ! $real_tmp || ! str_starts_with( $real_path, $real_tmp ) ) {
+			wp_die( esc_html__( 'File path is outside the allowed directory.', 'easy-wp-migration' ), 403 );
+		}
+
+		$filename = sprintf( 'db-export-%s.sql', $job_id );
+
+		// Stream the file.
+		nocache_headers();
+		header( 'Content-Type: application/sql; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . filesize( $real_path ) );
+
+		readfile( $real_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+		exit;
 	}
 
 	/**
