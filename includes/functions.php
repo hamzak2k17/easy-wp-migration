@@ -50,3 +50,44 @@ function ewpm_is_plugin_page( string $hook_suffix ): bool {
 
 	return in_array( $hook_suffix, $plugin_pages, true );
 }
+
+/**
+ * Format bytes into a human-readable string.
+ *
+ * @param int $bytes Byte count.
+ * @return string Formatted string (e.g. "4.2 GB", "127 MB").
+ */
+function ewpm_format_bytes( int $bytes ): string {
+	if ( 0 === $bytes ) {
+		return '0 B';
+	}
+
+	$units = [ 'B', 'KB', 'MB', 'GB', 'TB' ];
+	$power = (int) floor( log( $bytes, 1024 ) );
+	$power = min( $power, count( $units ) - 1 );
+
+	return round( $bytes / pow( 1024, $power ), 2 ) . ' ' . $units[ $power ];
+}
+
+/**
+ * Generate a sanitized backup filename.
+ *
+ * Produces a filename like "sitename-20260417-143022.ezmig".
+ *
+ * @param string $base Optional custom base name. Defaults to the site name.
+ * @return string Sanitized filename with extension.
+ */
+function ewpm_generate_backup_filename( string $base = '' ): string {
+	if ( empty( $base ) ) {
+		$base = sanitize_title( get_bloginfo( 'name' ) );
+
+		if ( empty( $base ) ) {
+			$base = 'wordpress';
+		}
+	}
+
+	$base = sanitize_file_name( $base );
+	$date = gmdate( 'Ymd-His' );
+
+	return $base . '-' . $date . '.' . EWPM_ARCHIVE_EXTENSION;
+}

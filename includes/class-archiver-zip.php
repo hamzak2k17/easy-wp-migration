@@ -88,6 +88,53 @@ class EWPM_Archiver_Zip implements EWPM_Archiver_Interface {
 	}
 
 	/**
+	 * Open an existing archive for appending.
+	 *
+	 * Uses ZipArchive::CREATE without OVERWRITE, so existing contents are
+	 * preserved. Reads existing metadata.json if present.
+	 *
+	 * @param string $path Absolute path to an existing archive file.
+	 * @throws EWPM_Archiver_Exception If ZipArchive is unavailable or opening fails.
+	 */
+	public function open_for_append( string $path ): void {
+		$this->assert_zip_available();
+		$this->assert_not_open();
+
+		$this->zip = new \ZipArchive();
+		$result    = $this->zip->open( $path, \ZipArchive::CREATE );
+
+		if ( true !== $result ) {
+			throw new EWPM_Archiver_Exception(
+				sprintf( 'Failed to open archive for appending at "%s" (ZipArchive error code: %d).', $path, $result )
+			);
+		}
+
+		$this->is_open = true;
+		$this->mode    = 'write';
+		$this->path    = $path;
+
+		// Read existing metadata if present.
+		$raw = $this->zip->getFromName( 'metadata.json' );
+
+		if ( false !== $raw ) {
+			$decoded = json_decode( $raw, true );
+
+			if ( is_array( $decoded ) ) {
+				$this->metadata = $decoded;
+			}
+		}
+	}
+
+	/**
+	 * Update the in-memory metadata that will be written on close.
+	 *
+	 * @param array<string, mixed> $metadata The complete metadata structure.
+	 */
+	public function update_metadata( array $metadata ): void {
+		$this->metadata = $metadata;
+	}
+
+	/**
 	 * Open an existing archive for reading.
 	 *
 	 * Validates that metadata.json exists and is structurally valid.

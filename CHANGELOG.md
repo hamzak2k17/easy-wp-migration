@@ -5,6 +5,25 @@ All notable changes to Easy WP Migration will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-04-17
+
+### Added
+
+- `EWPM_File_Scanner` — recursive file enumeration with glob-based exclusion matching, symlink loop detection, size cap enforcement, chunked scanning with time budget
+- `EWPM_Export_Presets` — component definitions (database, themes, plugins, media, other wp-content) and exclusion presets (cache, other backups, logs, dev files) with hardcoded forbidden patterns
+- `EWPM_Job_Export` — the full site export job composing file scanner, DB exporter, and archiver into 6 phases: init, scan_files, dump_database, archive_database, archive_files, finalize_archive
+- Export tab UI with component checkboxes, exclusion presets, custom pattern textarea, download/backup output options, progress bar, cancel, and result display
+- `EWPM_Archiver_Interface::open_for_append()` — reopen existing archive for multi-tick file addition without overwriting
+- `EWPM_Archiver_Interface::update_metadata()` — set cumulative metadata before final close
+- `EWPM.Job.resume()` — resume polling an existing job by ID (for page reload recovery)
+- `EWPM.Export` — export page JS with form collection, session storage resume, and result rendering
+- `ewpm_download_archive` AJAX endpoint streaming completed archives via `readfile()` with path validation (tmp/ and backups/ only)
+- `ewpm_format_bytes()` and `ewpm_generate_backup_filename()` helper functions
+- `EWPM_MAX_FILE_SIZE` constant (default 2 GB, overridable in wp-config.php)
+- NDJSON file list in tmp/ for memory-efficient handling of 100k+ file inventories
+- Atomic move (rename with copy+verify fallback) for save-as-backup flow
+- Self-exclusion: plugin storage folder always excluded from exports to prevent archive-includes-itself loops
+
 ## [0.4.0] — 2026-04-17
 
 ### Added

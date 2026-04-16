@@ -269,8 +269,8 @@ class EWPM_State {
 			$raw  = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
 			$data = is_string( $raw ) ? json_decode( $raw, true ) : null;
 
-			// Delete companion files referenced in state (partial archives, SQL dumps).
-			foreach ( [ 'archive_path', 'output_path' ] as $path_key ) {
+			// Delete companion files referenced in state (partial archives, SQL dumps, file lists).
+			foreach ( [ 'archive_path', 'output_path', 'db_temp_sql_path', 'files_list_path' ] as $path_key ) {
 				if ( is_array( $data ) && ! empty( $data[ $path_key ] ) ) {
 					$companion = (string) $data[ $path_key ];
 

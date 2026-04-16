@@ -86,6 +86,28 @@ interface EWPM_Archiver_Interface {
 	public function extract_string( string $archive_path ): string;
 
 	/**
+	 * Open an existing archive for appending.
+	 *
+	 * Opens the archive for writing without overwriting existing contents.
+	 * Used for multi-tick exports where the archive is closed between ticks
+	 * and reopened to add more files.
+	 *
+	 * @param string $path Absolute path to an existing archive file.
+	 * @throws EWPM_Archiver_Exception On failure to open the archive.
+	 */
+	public function open_for_append( string $path ): void;
+
+	/**
+	 * Update the in-memory metadata that will be written on close.
+	 *
+	 * Call before close() to set final cumulative stats for multi-session
+	 * archives where files_added/bytes_added counters reset on each open.
+	 *
+	 * @param array<string, mixed> $metadata The complete metadata structure.
+	 */
+	public function update_metadata( array $metadata ): void;
+
+	/**
 	 * Close the archive cleanly.
 	 *
 	 * For write mode, this finalizes the archive (updating metadata, flushing
