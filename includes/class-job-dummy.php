@@ -92,8 +92,8 @@ class EWPM_Job_Dummy extends EWPM_Job {
 		$delay   = (int) $state['delay_us'];
 
 		while ( $counter < $target ) {
-			// Check cancellation at top of each iteration.
-			if ( ! empty( $state['cancel_requested'] ) ) {
+			// Check cancellation: in-memory flag OR lock-free cancel file.
+			if ( ! empty( $state['cancel_requested'] ) || $this->state->has_cancel_flag( $state['job_id'] ) ) {
 				$state['cancelled']      = true;
 				$state['phase_label']    = 'Cancelled';
 				$state['progress_label'] = "Cancelled at count {$counter}";
