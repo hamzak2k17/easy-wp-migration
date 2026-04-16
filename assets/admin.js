@@ -106,33 +106,47 @@
 					/* 2. Poll ticks. */
 					while ( true ) { // eslint-disable-line no-constant-condition
 						if ( cancelled ) {
-							/* Wait for the cancel request to land, then
-							   do one final tick so the server processes
-							   the cancellation and we get confirmation. */
-							await sleep( 1000 );
+							/* Poll progress (read-only) until the server
+							   confirms cancellation, or give up after a
+							   few attempts. Using progress instead of
+							   tick avoids starting another work cycle. */
+							var attempts = 0;
+							var maxAttempts = 10;
 
-							try {
-								var cancelProgress = await ajaxPost(
-									'ewpm_job_tick',
-									{ job_id: jobId }
-								);
+							while ( attempts < maxAttempts ) {
+								await sleep( 2000 );
+								attempts++;
 
-								if ( onProgress ) {
-									onProgress( cancelProgress );
-								}
+								try {
+									var cancelProgress = await ajaxPost(
+										'ewpm_job_progress',
+										{ job_id: jobId }
+									);
 
-								if ( onCancel ) {
-									onCancel( cancelProgress );
+									if ( onProgress ) {
+										onProgress( cancelProgress );
+									}
+
+									if ( cancelProgress.cancelled || cancelProgress.done ) {
+										if ( onCancel ) {
+											onCancel( cancelProgress );
+										}
+										return;
+									}
+								} catch ( e ) {
+									/* State file may be gone — treat as
+									   cancelled. */
+									break;
 								}
-							} catch ( e ) {
-								/* Best-effort — server may have already
-								   cleaned up. */
-								if ( onCancel ) {
-									onCancel( {
-										cancelled: true,
-										progress_label: 'Job was cancelled.',
-									} );
-								}
+							}
+
+							/* Exhausted attempts — report as cancelled
+							   with last known state. */
+							if ( onCancel ) {
+								onCancel( {
+									cancelled: true,
+									progress_label: 'Job was cancelled.',
+								} );
 							}
 							return;
 						}
