@@ -221,6 +221,73 @@ assert_true( str_contains( $result2, 'REPLACED' ), 'Plain replacement still work
 // Summary.
 // ──────────────────────────────────────────────────────────────────────
 
+// ── Test 13: Live DB serialized option (WP-dependent) ───────────────
+
+$wp_load_paths = [
+	dirname( __DIR__, 4 ) . '/wp-load.php',
+	dirname( __DIR__, 3 ) . '/wp-load.php',
+];
+
+$wp_loaded = false;
+foreach ( $wp_load_paths as $wp_load ) {
+	if ( file_exists( $wp_load ) ) {
+		require_once $wp_load;
+		$wp_loaded = true;
+		break;
+	}
+}
+
+if ( $wp_loaded ) {
+	echo "\n[13] Live DB serialized option (WP loaded)\n";
+	global $wpdb;
+
+	$site_url = get_option( 'siteurl' );
+	echo "  Site URL: {$site_url}\n";
+
+	// Find a serialized option containing the site URL.
+	// phpcs:ignore
+	$row = $wpdb->get_row(
+		$wpdb->prepare(
+			"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_value LIKE %s AND option_value LIKE %s LIMIT 1",
+			'%s:%',
+			'%' . $wpdb->esc_like( $site_url ) . '%'
+		),
+		ARRAY_A
+	);
+
+	if ( $row ) {
+		$option_name = $row['option_name'];
+		$raw_before  = $row['option_value'];
+		echo "  Found option: {$option_name}\n";
+		echo "  Raw value (first 300 chars): " . substr( $raw_before, 0, 300 ) . "\n";
+
+		// Simulate cross-site replacement.
+		$fake_new_url = 'https://new-destination-site.example';
+		$result_raw   = EWPM_Serializer_Fix::replace( $raw_before, [ $site_url => $fake_new_url ] );
+
+		echo "  After replacement (first 300 chars): " . substr( $result_raw, 0, 300 ) . "\n";
+
+		// Verify URL was replaced.
+		assert_true( str_contains( $result_raw, $fake_new_url ), 'Live DB: new URL present in result' );
+		assert_true( ! str_contains( $result_raw, $site_url ), 'Live DB: old URL absent from result' );
+
+		// Verify s:N: lengths are correct by unserializing.
+		$decoded = @unserialize( $result_raw );
+		assert_true( false !== $decoded, 'Live DB: unserialize() succeeds (not corrupted)' );
+
+		if ( false !== $decoded ) {
+			// Re-serialize and compare structure.
+			$reserialized = serialize( $decoded );
+			assert_true( strlen( $reserialized ) > 0, 'Live DB: re-serialization produces non-empty output' );
+			echo "  unserialize() + serialize() roundtrip: OK\n";
+		}
+	} else {
+		echo "  No serialized option with site URL found — skipping live DB test.\n";
+	}
+} else {
+	echo "\n[13] Live DB test skipped (WordPress not available)\n";
+}
+
 echo "\n──────────────────────────────────────\n";
 echo "Results: {$pass_count}/{$test_count} assertions passed.\n";
 
