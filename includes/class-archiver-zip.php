@@ -333,9 +333,14 @@ class EWPM_Archiver_Zip implements EWPM_Archiver_Interface {
 		}
 
 		// In write mode, update metadata with final stats before closing.
+		// Only overwrite stats from local counters if files were actually
+		// added in this session. When update_metadata() was called (e.g.
+		// during finalize with cumulative stats), respect those values.
 		if ( 'write' === $this->mode ) {
-			$this->metadata['stats']['total_files'] = $this->files_added;
-			$this->metadata['stats']['total_bytes'] = $this->bytes_added;
+			if ( $this->files_added > 0 ) {
+				$this->metadata['stats']['total_files'] = $this->files_added;
+				$this->metadata['stats']['total_bytes'] = $this->bytes_added;
+			}
 
 			// Delete the placeholder and re-add with final data.
 			$this->zip->deleteName( 'metadata.json' );
