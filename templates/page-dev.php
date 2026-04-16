@@ -66,6 +66,61 @@ $job_ids       = $state_manager->list_all();
 		<div id="ewpm-dbexport-result"></div>
 	</div>
 
+	<!-- Import Test -->
+	<div class="ewpm-dev-section">
+		<h3><?php esc_html_e( 'Import Test', 'easy-wp-migration' ); ?></h3>
+
+		<div class="ewpm-dev-warning" style="margin-bottom: 12px;">
+			<?php esc_html_e( 'Import will overwrite your current site. This dev tool has NO auto-snapshot. If you cancel mid-flight, your site will be broken. Take a manual backup first via the Export tab.', 'easy-wp-migration' ); ?>
+		</div>
+
+		<div class="ewpm-dev-controls" style="flex-wrap: wrap;">
+			<label for="ewpm-import-archive">
+				<?php esc_html_e( 'Pick archive:', 'easy-wp-migration' ); ?>
+			</label>
+			<select id="ewpm-import-archive">
+				<option value=""><?php esc_html_e( '-- loading --', 'easy-wp-migration' ); ?></option>
+			</select>
+
+			<label for="ewpm-import-conflict">
+				<?php esc_html_e( 'Conflict:', 'easy-wp-migration' ); ?>
+			</label>
+			<select id="ewpm-import-conflict">
+				<option value="overwrite"><?php esc_html_e( 'Overwrite', 'easy-wp-migration' ); ?></option>
+				<option value="skip"><?php esc_html_e( 'Skip', 'easy-wp-migration' ); ?></option>
+				<option value="rename-old"><?php esc_html_e( 'Rename old', 'easy-wp-migration' ); ?></option>
+			</select>
+
+			<label>
+				<input type="checkbox" id="ewpm-import-replace-paths">
+				<?php esc_html_e( 'Replace filesystem paths', 'easy-wp-migration' ); ?>
+			</label>
+
+			<label>
+				<input type="checkbox" id="ewpm-import-stop-error">
+				<?php esc_html_e( 'Stop on first DB error', 'easy-wp-migration' ); ?>
+			</label>
+		</div>
+
+		<div class="ewpm-dev-controls" style="margin-top: 8px;">
+			<label for="ewpm-import-confirm">
+				<?php esc_html_e( 'Type IMPORT to enable:', 'easy-wp-migration' ); ?>
+			</label>
+			<input type="text" id="ewpm-import-confirm" placeholder="IMPORT" style="width: 100px;">
+
+			<button type="button" class="button button-primary" id="ewpm-import-start" disabled>
+				<?php esc_html_e( 'Start Import Test', 'easy-wp-migration' ); ?>
+			</button>
+
+			<button type="button" class="button ewpm-cancel-btn" id="ewpm-import-cancel" style="display:none;">
+				<?php esc_html_e( 'Cancel', 'easy-wp-migration' ); ?>
+			</button>
+		</div>
+
+		<div id="ewpm-import-progress"></div>
+		<div id="ewpm-import-result"></div>
+	</div>
+
 	<!-- Active Jobs -->
 	<div class="ewpm-dev-section">
 		<h3><?php esc_html_e( 'Active Jobs', 'easy-wp-migration' ); ?></h3>
@@ -268,6 +323,132 @@ $job_ids       = $state_manager->list_all();
 			dbJobHandle.cancel();
 		}
 	} );
+
+	/* -- Import Test ------------------------------------------------- */
+
+	var impArchiveSelect = document.getElementById( 'ewpm-import-archive' );
+	var impConflictSelect = document.getElementById( 'ewpm-import-conflict' );
+	var impReplacePathsCb = document.getElementById( 'ewpm-import-replace-paths' );
+	var impStopErrorCb = document.getElementById( 'ewpm-import-stop-error' );
+	var impConfirmInput = document.getElementById( 'ewpm-import-confirm' );
+	var impStartBtn = document.getElementById( 'ewpm-import-start' );
+	var impCancelBtn = document.getElementById( 'ewpm-import-cancel' );
+	var impProgressEl = document.getElementById( 'ewpm-import-progress' );
+	var impResultEl = document.getElementById( 'ewpm-import-result' );
+	var impJobHandle = null;
+
+	// Enable start button only when user types IMPORT.
+	if ( impConfirmInput && impStartBtn ) {
+		impConfirmInput.addEventListener( 'input', function () {
+			impStartBtn.disabled = ( impConfirmInput.value !== 'IMPORT' );
+		} );
+	}
+
+	// Load backup list.
+	if ( impArchiveSelect ) {
+		var fd = new FormData();
+		fd.append( 'action', 'ewpm_dev_list_backups' );
+		fd.append( 'nonce', window.ewpmData.nonce );
+		fetch( window.ewpmData.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: fd } )
+			.then( function ( r ) { return r.json(); } )
+			.then( function ( json ) {
+				impArchiveSelect.innerHTML = '';
+				if ( json.success && json.data.length > 0 ) {
+					json.data.forEach( function ( b ) {
+						var opt = document.createElement( 'option' );
+						opt.value = b.path;
+						opt.textContent = b.filename + ' (' + b.size_human + ', ' + b.date + ')';
+						impArchiveSelect.appendChild( opt );
+					} );
+				} else {
+					var opt = document.createElement( 'option' );
+					opt.value = '';
+					opt.textContent = 'No backups found. Run an export with "Save as backup" first.';
+					impArchiveSelect.appendChild( opt );
+				}
+			} );
+	}
+
+	// Start import.
+	if ( impStartBtn ) {
+		impStartBtn.addEventListener( 'click', function () {
+			var archivePath = impArchiveSelect ? impArchiveSelect.value : '';
+			if ( ! archivePath ) { alert( 'Select an archive first.' ); return; } // eslint-disable-line no-alert
+
+			impProgressEl.innerHTML = '';
+			impResultEl.innerHTML = '';
+			impStartBtn.disabled = true;
+			impCancelBtn.style.display = 'inline-block';
+
+			impJobHandle = EWPM.Job.start( {
+				job_type: 'import',
+				params: {
+					archive_path: archivePath,
+					conflict_strategy: impConflictSelect ? impConflictSelect.value : 'overwrite',
+					replace_paths: impReplacePathsCb ? impReplacePathsCb.checked : false,
+					stop_on_db_error: impStopErrorCb ? impStopErrorCb.checked : false,
+				},
+
+				onProgress: function ( data ) {
+					EWPM.UI.renderProgress( impProgressEl, data );
+				},
+
+				onDone: function ( result ) {
+					impCancelBtn.style.display = 'none';
+					impStartBtn.disabled = false;
+					impConfirmInput.value = '';
+
+					var html = '<strong>Import complete!</strong><br>';
+					html += 'Source: ' + escHtml( result.source_url || '' ) + '<br>';
+					html += 'Destination: ' + escHtml( result.destination_url || '' ) + '<br>';
+					html += 'DB statements: ' + ( result.db_statements || 0 ).toLocaleString() + '<br>';
+					html += 'Files extracted: ' + ( result.files_extracted || 0 ).toLocaleString() + '<br>';
+
+					if ( result.db_errors && result.db_errors.length > 0 ) {
+						html += '<br><strong>DB Errors (' + result.db_errors.length + '):</strong><br>';
+						result.db_errors.slice( 0, 10 ).forEach( function ( e ) {
+							html += '- ' + escHtml( e.error || '' ) + '<br>';
+						} );
+					}
+
+					if ( result.warnings && result.warnings.length > 0 ) {
+						html += '<br><strong>Warnings (' + result.warnings.length + '):</strong><br>';
+						result.warnings.slice( 0, 10 ).forEach( function ( w ) {
+							html += '- ' + escHtml( w ) + '<br>';
+						} );
+					}
+
+					if ( result.note ) {
+						html += '<br><em>' + escHtml( result.note ) + '</em>';
+					}
+
+					impResultEl.className = 'ewpm-dev-result ewpm-dev-result--success';
+					impResultEl.innerHTML = html;
+				},
+
+				onError: function ( err ) {
+					impCancelBtn.style.display = 'none';
+					impStartBtn.disabled = false;
+					impConfirmInput.value = '';
+					impResultEl.className = 'ewpm-dev-result ewpm-dev-result--error';
+					impResultEl.textContent = 'Error: ' + err.message;
+				},
+
+				onCancel: function ( data ) {
+					impCancelBtn.style.display = 'none';
+					impStartBtn.disabled = false;
+					impConfirmInput.value = '';
+					EWPM.UI.renderProgress( impProgressEl, data );
+					impResultEl.className = 'ewpm-dev-result ewpm-dev-result--error';
+					impResultEl.textContent = 'Import cancelled. Your site may be in an inconsistent state.';
+				},
+			} );
+		} );
+
+		impCancelBtn.addEventListener( 'click', function () {
+			if ( impJobHandle ) { impJobHandle.cancel(); }
+		} );
+	}
 
 	/* -- Helpers ------------------------------------------------------ */
 

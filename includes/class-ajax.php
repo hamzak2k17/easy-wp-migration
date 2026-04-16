@@ -34,6 +34,7 @@ class EWPM_Ajax {
 			add_action( 'wp_ajax_ewpm_dev_delete_state', [ $this, 'handle_dev_delete_state' ] );
 			add_action( 'wp_ajax_ewpm_dev_cleanup', [ $this, 'handle_dev_cleanup' ] );
 			add_action( 'wp_ajax_ewpm_dev_download_sql', [ $this, 'handle_dev_download_sql' ] );
+			add_action( 'wp_ajax_ewpm_dev_list_backups', [ $this, 'handle_dev_list_backups' ] );
 		}
 	}
 
@@ -258,6 +259,40 @@ class EWPM_Ajax {
 
 		readfile( $real_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
 		exit;
+	}
+
+	/**
+	 * Dev-only: list backup archives in the backups/ folder.
+	 *
+	 * Returns filename, size, date for each .ezmig file.
+	 */
+	public function handle_dev_list_backups(): void {
+		if ( true !== EWPM_DEV_MODE || ! defined( 'WP_DEBUG' ) || true !== WP_DEBUG ) {
+			wp_send_json_error( [ 'error' => 'Dev mode is not enabled.' ], 403 );
+		}
+
+		$this->verify_request();
+
+		$backups_dir = ewpm_get_backups_dir();
+		$result      = [];
+
+		if ( is_dir( $backups_dir ) ) {
+			$files = glob( $backups_dir . '*.' . EWPM_ARCHIVE_EXTENSION );
+
+			if ( $files ) {
+				foreach ( $files as $file ) {
+					$result[] = [
+						'filename'   => basename( $file ),
+						'path'       => $file,
+						'size'       => (int) filesize( $file ),
+						'size_human' => size_format( filesize( $file ) ),
+						'date'       => gmdate( 'Y-m-d H:i:s', filemtime( $file ) ),
+					];
+				}
+			}
+		}
+
+		wp_send_json_success( $result );
 	}
 
 	/**

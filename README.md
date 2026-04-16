@@ -17,7 +17,7 @@ Lightweight WordPress site migration and backup tool. Export your entire site to
 - [x] Phase 3: State machine, job framework, and chunked AJAX foundation
 - [x] Phase 4: Database exporter (chunked SQL dump)
 - [x] Phase 5: File exporter (themes, plugins, media, wp-content)
-- [ ] Phase 6: Importer (database restore + file extraction)
+- [x] Phase 6: Importer (database restore + file extraction)
 - [ ] Phase 7: Admin UI for export and import with progress
 - [ ] Phase 8: Backup management (list, restore, delete)
 - [ ] Phase 9: Download and file-size handling

@@ -3,7 +3,7 @@
  * Plugin Name: Easy WP Migration
  * Plugin URI:  https://wordpress.org/plugins/easy-wp-migration/
  * Description: Lightweight site migration and backup tool. Export, import, pull from URL, and manage server-side backups.
- * Version:     0.5.0
+ * Version:     0.6.0
  * Requires at least: 6.2
  * Requires PHP: 8.1
  * Author:      DotClick LLC
@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'EWPM_VERSION', '0.5.0' );
+define( 'EWPM_VERSION', '0.6.0' );
 define( 'EWPM_PLUGIN_FILE', __FILE__ );
 define( 'EWPM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EWPM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

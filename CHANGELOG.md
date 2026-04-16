@@ -5,6 +5,19 @@ All notable changes to Easy WP Migration will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-04-17
+
+### Added
+
+- `EWPM_Serializer_Fix` — serialization-aware search-replace with byte-length re-encoding for PHP's `s:N:"..."` format. Handles nested serialized arrays/objects, multibyte strings, and mixed plain+serialized content.
+- `EWPM_DB_Importer` — SQL replay engine with chunked statement parsing, table prefix rewriting, connection retry on MySQL gone away, NO_BACKSLASH_ESCAPES sql_mode handling, and prefix-scoped DROP safety.
+- `EWPM_File_Importer` — archive file extraction to WordPress paths with conflict strategies (overwrite/skip/rename-old), path traversal defense, WP root boundary enforcement, and self-storage folder protection.
+- `EWPM_Job_Import` — import job with phases: validate_archive, extract_database_sql, replay_database (with serialization-aware URL replacement), extract_files, post_import_fixup (flush rewrite rules, cache, force siteurl/home to current values).
+- Serialization-aware URL replacement applied to INSERT statements during DB replay: handles site_url, home_url, URL-encoded variants, optional filesystem path replacement.
+- Dev Tools: "Import Test" section with backup archive picker, conflict strategy, path replacement toggle, stop-on-error toggle, and IMPORT confirmation challenge.
+- `ewpm_dev_list_backups` AJAX endpoint listing backups/ folder contents.
+- CLI test suite `tests/test-serializer-fix.php` with 12 test groups covering plain strings, length-changing replacements, multibyte, nested serialization, objects, mixed content, malformed data, and false-positive resistance.
+
 ## [0.5.0] — 2026-04-17
 
 ### Added
