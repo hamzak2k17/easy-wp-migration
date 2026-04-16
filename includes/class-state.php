@@ -100,11 +100,13 @@ class EWPM_State {
 	 * @param string $job_id The job identifier.
 	 */
 	public function delete( string $job_id ): void {
-		$state_path = $this->get_state_path( $job_id );
-		$lock_path  = $this->get_lock_path( $job_id );
+		$state_path  = $this->get_state_path( $job_id );
+		$lock_path   = $this->get_lock_path( $job_id );
+		$cancel_path = $this->get_cancel_path( $job_id );
 
 		$this->safe_unlink( $state_path );
 		$this->safe_unlink( $lock_path );
+		$this->safe_unlink( $cancel_path );
 		$this->safe_unlink( $state_path . '.tmp' );
 	}
 
@@ -186,6 +188,44 @@ class EWPM_State {
 
 		// Best-effort removal of lock file.
 		@unlink( $this->get_lock_path( $job_id ) ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	}
+
+	/**
+	 * Write a cancel flag file for a job.
+	 *
+	 * This does NOT require the state lock, so it can be called while a
+	 * tick is running. The tick checks for this file to detect cancellation.
+	 *
+	 * @param string $job_id The job identifier.
+	 */
+	public function set_cancel_flag( string $job_id ): void {
+		$path = $this->get_cancel_path( $job_id );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $path, (string) time() );
+	}
+
+	/**
+	 * Check whether a cancel flag file exists for a job.
+	 *
+	 * @param string $job_id The job identifier.
+	 * @return bool True if cancellation was requested.
+	 */
+	public function has_cancel_flag( string $job_id ): bool {
+		return file_exists( $this->get_cancel_path( $job_id ) );
+	}
+
+	/**
+	 * Remove the cancel flag file for a job.
+	 *
+	 * @param string $job_id The job identifier.
+	 */
+	public function clear_cancel_flag( string $job_id ): void {
+		$path = $this->get_cancel_path( $job_id );
+
+		if ( file_exists( $path ) ) {
+			@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
 	}
 
 	/**
@@ -272,6 +312,16 @@ class EWPM_State {
 	 */
 	private function get_lock_path( string $job_id ): string {
 		return ewpm_get_tmp_dir() . "job-{$job_id}.lock";
+	}
+
+	/**
+	 * Get the cancel flag file path for a job.
+	 *
+	 * @param string $job_id The job identifier.
+	 * @return string Absolute path.
+	 */
+	private function get_cancel_path( string $job_id ): string {
+		return ewpm_get_tmp_dir() . "job-{$job_id}.cancel";
 	}
 
 	/**

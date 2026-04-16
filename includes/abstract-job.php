@@ -131,10 +131,14 @@ abstract class EWPM_Job {
 				return $this->get_public_progress( $state );
 			}
 
-			// Handle cancellation before doing work.
-			if ( ! empty( $state['cancel_requested'] ) ) {
+			// Handle cancellation before doing work. Check both the
+			// in-state flag and the separate cancel flag file (which
+			// can be written without the lock by a concurrent request).
+			if ( ! empty( $state['cancel_requested'] ) || $this->state->has_cancel_flag( $job_id ) ) {
 				$this->cleanup( $state );
+				$this->state->clear_cancel_flag( $job_id );
 				$state['cancelled']      = true;
+				$state['cancel_requested'] = true;
 				$state['phase_label']    = 'Cancelled';
 				$state['progress_label'] = 'Job was cancelled.';
 				$state['updated_at']     = gmdate( 'c' );
@@ -164,20 +168,17 @@ abstract class EWPM_Job {
 	}
 
 	/**
-	 * Request cancellation. The next tick will see cancel_requested and stop.
+	 * Request cancellation via a flag file.
+	 *
+	 * Uses a separate cancel flag file that does NOT require the state lock,
+	 * so cancellation can be requested even while a tick is running. The tick
+	 * checks for this flag at the top of each iteration.
 	 *
 	 * @param string $job_id The job identifier.
 	 */
 	public function cancel( string $job_id ): void {
-		$this->state->acquire_lock( $job_id );
+		$this->state->set_cancel_flag( $job_id );
 
-		try {
-			$state                   = $this->state->load( $job_id );
-			$state['cancel_requested'] = true;
-			$this->state->save( $job_id, $state );
-		} finally {
-			$this->state->release_lock( $job_id );
-		}
 	}
 
 	/**
