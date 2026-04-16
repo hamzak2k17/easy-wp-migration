@@ -1,0 +1,198 @@
+/**
+ * Easy WP Migration — Admin styles.
+ *
+ * @package EasyWPMigration
+ */
+
+/* ------------------------------------------------------------------ */
+/*  Tab navigation                                                     */
+/* ------------------------------------------------------------------ */
+
+.ewpm-tabs {
+	display: flex;
+	gap: 0;
+	margin: 20px 0 0;
+	border-bottom: 1px solid #c3c4c7;
+}
+
+.ewpm-tab {
+	display: inline-block;
+	padding: 10px 20px;
+	text-decoration: none;
+	color: #50575e;
+	font-size: 14px;
+	font-weight: 500;
+	border: 1px solid transparent;
+	border-bottom: none;
+	margin-bottom: -1px;
+	background: transparent;
+	transition: color 0.15s ease;
+}
+
+.ewpm-tab:hover {
+	color: #135e96;
+}
+
+.ewpm-tab--active {
+	color: #1d2327;
+	background: #fff;
+	border-color: #c3c4c7;
+	border-bottom-color: #fff;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Content area                                                       */
+/* ------------------------------------------------------------------ */
+
+.ewpm-content {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-top: none;
+	padding: 20px;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Progress bar                                                       */
+/* ------------------------------------------------------------------ */
+
+.ewpm-progress {
+	margin: 15px 0;
+}
+
+.ewpm-progress__phase {
+	font-size: 14px;
+	font-weight: 600;
+	color: #1d2327;
+	margin-bottom: 8px;
+}
+
+.ewpm-progress__bar-wrapper {
+	height: 24px;
+	background: #f0f0f1;
+	border-radius: 4px;
+	overflow: hidden;
+	border: 1px solid #c3c4c7;
+}
+
+.ewpm-progress__bar {
+	height: 100%;
+	background: #2271b1;
+	border-radius: 3px;
+	transition: width 0.3s ease;
+	min-width: 0;
+}
+
+.ewpm-progress__info {
+	display: flex;
+	justify-content: space-between;
+	margin-top: 6px;
+	font-size: 13px;
+	color: #50575e;
+}
+
+.ewpm-progress--done .ewpm-progress__bar {
+	background: #00a32a;
+}
+
+.ewpm-progress--cancelled .ewpm-progress__bar {
+	background: #dba617;
+}
+
+.ewpm-progress--error .ewpm-progress__bar {
+	background: #d63638;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Dev tools page                                                     */
+/* ------------------------------------------------------------------ */
+
+.ewpm-dev-warning {
+	background: #fcf0f1;
+	border: 1px solid #d63638;
+	border-left-width: 4px;
+	padding: 12px 16px;
+	margin-bottom: 20px;
+	color: #d63638;
+	font-weight: 600;
+}
+
+.ewpm-dev-section {
+	margin-bottom: 30px;
+	padding: 16px;
+	background: #f6f7f7;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+}
+
+.ewpm-dev-section h3 {
+	margin-top: 0;
+}
+
+.ewpm-dev-controls {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.ewpm-dev-controls label {
+	font-size: 13px;
+	color: #50575e;
+}
+
+.ewpm-dev-controls input[type="number"] {
+	width: 80px;
+}
+
+.ewpm-dev-result {
+	margin-top: 12px;
+	padding: 10px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	font-size: 13px;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.ewpm-dev-result--success {
+	border-left: 4px solid #00a32a;
+}
+
+.ewpm-dev-result--error {
+	border-left: 4px solid #d63638;
+}
+
+.ewpm-jobs-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+.ewpm-jobs-table th,
+.ewpm-jobs-table td {
+	padding: 8px 10px;
+	border-bottom: 1px solid #c3c4c7;
+	text-align: left;
+}
+
+.ewpm-jobs-table th {
+	background: #f0f0f1;
+	font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cancel button                                                      */
+/* ------------------------------------------------------------------ */
+
+.ewpm-cancel-btn {
+	margin-top: 10px;
+	color: #d63638;
+	border-color: #d63638;
+}
+
+.ewpm-cancel-btn:hover {
+	background: #d63638;
+	color: #fff;
+	border-color: #d63638;
+}
