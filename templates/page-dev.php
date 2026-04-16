@@ -184,7 +184,7 @@ $job_ids       = $state_manager->list_all();
 </div>
 
 <script>
-( function () {
+document.addEventListener( 'DOMContentLoaded', function () {
 	'use strict';
 
 	var startBtn  = document.getElementById( 'ewpm-dummy-start' );
@@ -529,5 +529,5 @@ $job_ids       = $state_manager->list_all();
 				cleanupResult.textContent = 'Network error: ' + err.message;
 			} );
 	} );
-} )();
+} );
 </script>
