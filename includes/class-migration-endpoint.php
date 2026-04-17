@@ -26,6 +26,11 @@ class EWPM_Migration_Endpoint {
 		add_filter( 'query_vars', [ __CLASS__, 'register_query_vars' ] );
 		add_action( 'parse_request', [ __CLASS__, 'handle_request' ] );
 
+		// AJAX fallback for hosts where front-end rewrite/query vars are
+		// intercepted (e.g. InstaWP splash pages). Unauthenticated via nopriv.
+		add_action( 'wp_ajax_nopriv_ewpm_migrate', [ __CLASS__, 'handle_ajax_migrate' ] );
+		add_action( 'wp_ajax_ewpm_migrate', [ __CLASS__, 'handle_ajax_migrate' ] );
+
 		// Flush rewrites on version change.
 		self::maybe_flush_rewrites();
 	}
@@ -115,6 +120,70 @@ class EWPM_Migration_Endpoint {
 
 		// Serve the file.
 		self::serve_file( $path, $filename );
+		exit;
+	}
+
+	/**
+	 * Handle migration requests via admin-ajax.php (nopriv).
+	 *
+	 * Used as fallback when front-end query vars are intercepted by
+	 * hosting platform middleware (e.g. InstaWP splash pages).
+	 * URL format: admin-ajax.php?action=ewpm_migrate&token={token}
+	 */
+	public static function handle_ajax_migrate(): void {
+		$token = sanitize_text_field( wp_unslash( $_GET['token'] ?? $_POST['token'] ?? '' ) );
+
+		if ( empty( $token ) ) {
+			status_header( 400 );
+			echo 'Missing token.';
+			exit;
+		}
+
+		// Disable output buffering.
+		while ( ob_get_level() ) {
+			ob_end_clean();
+		}
+
+		// Rate limit.
+		$rl_key = 'mig_' . md5( $token );
+
+		if ( ! EWPM_Rate_Limiter::check( $rl_key, 20, 60 ) ) {
+			status_header( 429 );
+			header( 'Retry-After: 60' );
+			header( 'Content-Type: text/plain; charset=utf-8' );
+			echo 'Too many requests.';
+			exit;
+		}
+
+		EWPM_Rate_Limiter::record( $rl_key, 60 );
+
+		// Validate.
+		$tokens = new EWPM_Migration_Tokens();
+		$result = $tokens->validate( $token );
+
+		if ( ! $result['valid'] ) {
+			status_header( 403 );
+			header( 'Content-Type: text/plain; charset=utf-8' );
+			echo 'Invalid or expired migration link.';
+			exit;
+		}
+
+		// Resolve file.
+		try {
+			$backups = new EWPM_Backups();
+			$path    = $backups->get_download_path( $result['filename'] );
+		} catch ( \Throwable $e ) {
+			status_header( 404 );
+			header( 'Content-Type: text/plain; charset=utf-8' );
+			echo 'Backup file not found.';
+			exit;
+		}
+
+		// Record access.
+		$tokens->record_access( $result['tid'], self::get_client_ip() );
+
+		// Serve.
+		self::serve_file( $path, $result['filename'] );
 		exit;
 	}
 

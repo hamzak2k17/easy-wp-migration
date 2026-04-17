@@ -114,6 +114,7 @@ class EWPM_Migration_Tokens {
 
 		$url_pretty   = home_url( '/ewpm-migrate/' . urlencode( $token ) . '/' );
 		$url_fallback = add_query_arg( 'ewpm_migrate', urlencode( $token ), home_url( '/' ) );
+		$url_ajax     = add_query_arg( [ 'action' => 'ewpm_migrate', 'token' => urlencode( $token ) ], admin_url( 'admin-ajax.php' ) );
 
 		return [
 			'token'        => $token,
@@ -121,6 +122,7 @@ class EWPM_Migration_Tokens {
 			'expires_at'   => $expires_at,
 			'url_pretty'   => $url_pretty,
 			'url_fallback' => $url_fallback,
+			'url_ajax'     => $url_ajax,
 		];
 	}
 
