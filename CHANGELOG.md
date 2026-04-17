@@ -5,6 +5,24 @@ All notable changes to Easy WP Migration will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-04-17
+
+### Added
+
+- `EWPM_Backups` service class: listing, metadata reading (cached), deletion with realpath guard, auto-snapshot cleanup with 7-day minimum retention clamp
+- Backups tab UI replacing Phase 1 placeholder: backup list table with type labels, source URL, size, date, and details expander
+- Filter bar: All / User backups / Auto-snapshots radio filters + filename search
+- Per-backup actions: Restore (full consent modal + inline progress), Download (streaming), Delete (confirmation modal)
+- Bulk delete with per-file error handling (partial success supported)
+- Restore-from-backup flow: consent modal (4 checkboxes + IMPORT), optional safety snapshot, inline progress in backup row
+- Auto-snapshot cleanup via daily WP cron (`ewpm_daily_cleanup`): deletes `auto-before-import-*` files older than 30 days (configurable via `EWPM_AUTO_SNAPSHOT_RETENTION_DAYS`, min 7)
+- Manual "Run cleanup now" button in Advanced section with freed space reporting
+- Activation hook schedules cron; deactivation hook unschedules it
+- Storage usage summary display
+- Corrupt archive handling: list shows metadata_error when archive is unreadable, other actions still work
+- AJAX endpoints: `ewpm_delete_backup`, `ewpm_delete_backups_bulk`, `ewpm_run_cleanup_now`
+- Enhanced `ewpm_list_backups` to include metadata, source URL, and auto-snapshot flag
+
 ## [0.7.0] — 2026-04-17
 
 ### Added

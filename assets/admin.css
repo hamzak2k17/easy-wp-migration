@@ -337,6 +337,107 @@
 }
 
 /* ------------------------------------------------------------------ */
+/*  Backups tab                                                        */
+/* ------------------------------------------------------------------ */
+
+.ewpm-backups-header {
+	margin-bottom: 16px;
+}
+
+.ewpm-backups-header__actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 10px;
+}
+
+.ewpm-backups-header__actions span {
+	font-size: 13px;
+	color: #50575e;
+}
+
+.ewpm-backups-filters {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 12px;
+	flex-wrap: wrap;
+}
+
+.ewpm-backups-bulk {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+
+.ewpm-backups-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+.ewpm-backups-table th,
+.ewpm-backups-table td {
+	padding: 8px 10px;
+	border-bottom: 1px solid #f0f0f1;
+	text-align: left;
+	vertical-align: top;
+}
+
+.ewpm-backups-table th {
+	background: #f6f7f7;
+	font-weight: 600;
+	border-bottom: 1px solid #c3c4c7;
+}
+
+.ewpm-backups-table tr:hover {
+	background: #f9f9f9;
+}
+
+.ewpm-backup-type {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.ewpm-backup-type--user {
+	background: #e7f5e7;
+	color: #00a32a;
+}
+
+.ewpm-backup-type--auto {
+	background: #f0f0f1;
+	color: #50575e;
+}
+
+.ewpm-backup-filename {
+	font-family: monospace;
+	font-size: 12px;
+	word-break: break-all;
+}
+
+.ewpm-backup-actions {
+	white-space: nowrap;
+}
+
+.ewpm-backup-actions .button {
+	margin-right: 4px;
+}
+
+.ewpm-backup-details {
+	padding: 10px;
+	background: #f9f9f9;
+}
+
+.ewpm-backup-row-progress,
+.ewpm-backup-row-result {
+	margin-top: 8px;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Dev tools page                                                     */
 /* ------------------------------------------------------------------ */
 

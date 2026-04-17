@@ -34,6 +34,9 @@ class EWPM_Ajax {
 		add_action( 'wp_ajax_ewpm_upload_abort', [ $this, 'handle_upload_abort' ] );
 		add_action( 'wp_ajax_ewpm_list_backups', [ $this, 'handle_list_backups' ] );
 		add_action( 'wp_ajax_ewpm_import_preview', [ $this, 'handle_import_preview' ] );
+		add_action( 'wp_ajax_ewpm_delete_backup', [ $this, 'handle_delete_backup' ] );
+		add_action( 'wp_ajax_ewpm_delete_backups_bulk', [ $this, 'handle_delete_backups_bulk' ] );
+		add_action( 'wp_ajax_ewpm_run_cleanup_now', [ $this, 'handle_run_cleanup_now' ] );
 
 		// Dev-only endpoints — registered conditionally.
 		if ( true === EWPM_DEV_MODE ) {
@@ -350,32 +353,99 @@ class EWPM_Ajax {
 	public function handle_list_backups(): void {
 		$this->verify_request();
 
-		$backups_dir = ewpm_get_backups_dir();
-		$result      = [];
+		$backups = new EWPM_Backups();
+		$list    = $backups->list();
 
-		if ( is_dir( $backups_dir ) ) {
-			$files = glob( $backups_dir . '*.' . EWPM_ARCHIVE_EXTENSION );
+		// Flatten metadata for JSON transport.
+		$result = array_map( function ( $item ) {
+			$source_url = '';
 
-			if ( $files ) {
-				foreach ( $files as $file ) {
-					$name = basename( $file );
-					$result[] = [
-						'filename'         => $name,
-						'path'             => $file,
-						'size_bytes'       => (int) filesize( $file ),
-						'size_human'       => size_format( filesize( $file ) ),
-						'mtime'            => filemtime( $file ),
-						'date'             => gmdate( 'Y-m-d H:i:s', filemtime( $file ) ),
-						'is_auto_snapshot' => str_starts_with( $name, 'auto-before-import-' ),
-					];
-				}
+			if ( ! empty( $item['metadata']['source']['site_url'] ) ) {
+				$source_url = $item['metadata']['source']['site_url'];
+			}
 
-				// Sort by date descending.
-				usort( $result, fn( $a, $b ) => $b['mtime'] - $a['mtime'] );
+			return [
+				'filename'         => $item['filename'],
+				'path'             => $item['absolute_path'],
+				'size_bytes'       => $item['size_bytes'],
+				'size_human'       => $item['size_human'],
+				'mtime'            => $item['mtime'],
+				'date'             => gmdate( 'Y-m-d H:i:s', $item['mtime'] ),
+				'created_human'    => $item['created_human'],
+				'is_auto_snapshot' => $item['is_auto_snapshot'],
+				'source_url'       => $source_url,
+				'metadata'         => $item['metadata'],
+				'metadata_error'   => $item['metadata_error'],
+			];
+		}, $list );
+
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * Delete a single backup file.
+	 */
+	public function handle_delete_backup(): void {
+		$this->verify_request();
+
+		$filename = sanitize_file_name( wp_unslash( $_POST['filename'] ?? '' ) );
+
+		try {
+			$backups = new EWPM_Backups();
+			$backups->delete( $filename );
+			wp_send_json_success( [ 'deleted' => $filename ] );
+		} catch ( \Exception $e ) {
+			wp_send_json_error( [ 'error' => $e->getMessage() ], 400 );
+		}
+	}
+
+	/**
+	 * Bulk delete backup files.
+	 */
+	public function handle_delete_backups_bulk(): void {
+		$this->verify_request();
+
+		$filenames_raw = isset( $_POST['filenames'] ) ? wp_unslash( $_POST['filenames'] ) : '[]'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$filenames     = json_decode( $filenames_raw, true );
+
+		if ( ! is_array( $filenames ) ) {
+			wp_send_json_error( [ 'error' => __( 'Invalid filenames list.', 'easy-wp-migration' ) ], 400 );
+		}
+
+		$backups = new EWPM_Backups();
+		$deleted = [];
+		$failed  = [];
+
+		foreach ( $filenames as $name ) {
+			$name = sanitize_file_name( $name );
+
+			try {
+				$backups->delete( $name );
+				$deleted[] = $name;
+			} catch ( \Exception $e ) {
+				$failed[] = [ 'filename' => $name, 'error' => $e->getMessage() ];
 			}
 		}
 
-		wp_send_json_success( $result );
+		wp_send_json_success( [ 'deleted' => $deleted, 'failed' => $failed ] );
+	}
+
+	/**
+	 * Run auto-snapshot cleanup on demand.
+	 */
+	public function handle_run_cleanup_now(): void {
+		$this->verify_request();
+
+		$backups = new EWPM_Backups();
+		$result  = $backups->cleanup_expired_auto_snapshots( EWPM_AUTO_SNAPSHOT_RETENTION_DAYS );
+
+		update_option( 'ewpm_last_auto_cleanup', gmdate( 'Y-m-d H:i:s' ) . ' UTC' );
+
+		wp_send_json_success( [
+			'deleted'      => $result['deleted'],
+			'freed_bytes'  => $result['freed_bytes'],
+			'freed_human'  => size_format( $result['freed_bytes'] ),
+		] );
 	}
 
 	/**

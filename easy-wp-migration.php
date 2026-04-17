@@ -3,7 +3,7 @@
  * Plugin Name: Easy WP Migration
  * Plugin URI:  https://wordpress.org/plugins/easy-wp-migration/
  * Description: Lightweight site migration and backup tool. Export, import, pull from URL, and manage server-side backups.
- * Version:     0.7.0
+ * Version:     0.8.0
  * Requires at least: 6.2
  * Requires PHP: 8.1
  * Author:      DotClick LLC
@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'EWPM_VERSION', '0.7.0' );
+define( 'EWPM_VERSION', '0.8.0' );
 define( 'EWPM_PLUGIN_FILE', __FILE__ );
 define( 'EWPM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EWPM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -39,6 +39,9 @@ if ( ! defined( 'EWPM_TICK_BUDGET_SECONDS' ) ) {
 }
 if ( ! defined( 'EWPM_MAX_FILE_SIZE' ) ) {
 	define( 'EWPM_MAX_FILE_SIZE', 2 * 1024 * 1024 * 1024 ); // 2 GB. Override in wp-config.php.
+}
+if ( ! defined( 'EWPM_AUTO_SNAPSHOT_RETENTION_DAYS' ) ) {
+	define( 'EWPM_AUTO_SNAPSHOT_RETENTION_DAYS', 30 ); // Auto-snapshots older than this are cleaned up. Min 7.
 }
 
 /**
@@ -112,13 +115,32 @@ register_activation_hook( __FILE__, function (): void {
 			file_put_contents( $index, "<?php\n// Silence is golden.\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		}
 	}
+
+	// Schedule daily auto-snapshot cleanup cron.
+	if ( ! wp_next_scheduled( 'ewpm_daily_cleanup' ) ) {
+		wp_schedule_event( time(), 'daily', 'ewpm_daily_cleanup' );
+	}
 } );
 
 /**
  * Deactivation hook: stub only — no cleanup so users can safely reactivate.
  */
 register_deactivation_hook( __FILE__, function (): void {
-	// Intentionally empty. Users may reactivate; data is preserved.
+	// Unschedule cron. Data is preserved for reactivation.
+	$timestamp = wp_next_scheduled( 'ewpm_daily_cleanup' );
+	if ( $timestamp ) {
+		wp_unschedule_event( $timestamp, 'ewpm_daily_cleanup' );
+	}
+} );
+
+/**
+ * Daily cron: clean up expired auto-snapshots and stale tmp files.
+ */
+add_action( 'ewpm_daily_cleanup', function (): void {
+	$backups = new EWPM_Backups();
+	$backups->cleanup_expired_auto_snapshots( EWPM_AUTO_SNAPSHOT_RETENTION_DAYS );
+	EWPM_State::cleanup_stale( 24 );
+	update_option( 'ewpm_last_auto_cleanup', gmdate( 'Y-m-d H:i:s' ) . ' UTC' );
 } );
 
 /**

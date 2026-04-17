@@ -955,12 +955,357 @@
 	};
 
 	/* ------------------------------------------------------------------ */
+	/*  EWPM.Backups — backups tab logic                                   */
+	/* ------------------------------------------------------------------ */
+
+	EWPM.Backups = {
+		allBackups: [],
+		selectedFiles: [],
+		restoreTarget: null,
+
+		init: function () {
+			if ( ! document.getElementById( 'ewpm-backups-page' ) ) { return; }
+			this.loadList();
+			this.bindFilters();
+			this.bindRestoreModal();
+			this.bindDeleteModal();
+			this.bindCleanup();
+			this.bindBulkDelete();
+		},
+
+		loadList: function () {
+			var self = this;
+			ajaxPost( 'ewpm_list_backups', {} ).then( function ( data ) {
+				self.allBackups = data;
+				self.renderList( data );
+				self.updateSummary( data );
+			} ).catch( function ( err ) {
+				document.getElementById( 'ewpm-backups-list' ).innerHTML =
+					'<p class="ewpm-export-result--error">Failed to load backups: ' + escHtml( err.message ) + '</p>';
+			} );
+		},
+
+		renderList: function ( backups ) {
+			var container = document.getElementById( 'ewpm-backups-list' );
+
+			if ( backups.length === 0 ) {
+				container.innerHTML = '<p>' + escHtml( 'No backups yet. Create one via the Export tab, or they\'ll be created automatically before each import.' ) + '</p>';
+				return;
+			}
+
+			var downloadNonce = config.nonce;
+			var html = '<table class="ewpm-backups-table"><thead><tr>';
+			html += '<th><input type="checkbox" id="ewpm-backups-select-all"></th>';
+			html += '<th>Type</th><th>Filename</th><th>Source</th><th>Size</th><th>Created</th><th>Actions</th>';
+			html += '</tr></thead><tbody>';
+
+			backups.forEach( function ( b ) {
+				var typeLabel = b.is_auto_snapshot ? 'Auto' : 'User';
+				var typeCls   = b.is_auto_snapshot ? 'ewpm-backup-type--auto' : 'ewpm-backup-type--user';
+				var source    = b.source_url || ( b.metadata_error ? 'unreadable' : '—' );
+
+				html += '<tr data-filename="' + escHtml( b.filename ) + '" data-auto="' + ( b.is_auto_snapshot ? '1' : '0' ) + '">';
+				html += '<td><input type="checkbox" class="ewpm-backup-check" value="' + escHtml( b.filename ) + '"></td>';
+				html += '<td><span class="ewpm-backup-type ' + typeCls + '">' + typeLabel + '</span></td>';
+				html += '<td class="ewpm-backup-filename">' + escHtml( b.filename ) + '</td>';
+				html += '<td>' + escHtml( source ) + '</td>';
+				html += '<td>' + escHtml( b.size_human ) + '</td>';
+				html += '<td title="' + escHtml( b.date ) + '">' + escHtml( b.created_human ) + '</td>';
+				html += '<td class="ewpm-backup-actions">';
+				html += '<button class="button button-small ewpm-backup-restore" data-path="' + escHtml( b.path ) + '">Restore</button> ';
+
+				var dlUrl = config.ajaxUrl + '?action=ewpm_download_archive&backup_filename=' + encodeURIComponent( b.filename ) + '&_wpnonce=' + downloadNonce;
+				html += '<a href="' + dlUrl + '" class="button button-small">Download</a> ';
+				html += '<button class="button button-small ewpm-backup-delete" data-filename="' + escHtml( b.filename ) + '">Delete</button>';
+				html += '<div class="ewpm-backup-row-progress" style="display:none;"></div>';
+				html += '<div class="ewpm-backup-row-result" style="display:none;"></div>';
+				html += '</td></tr>';
+
+				// Details row.
+				html += '<tr class="ewpm-backup-details-row" style="display:none;" data-detail-for="' + escHtml( b.filename ) + '">';
+				html += '<td colspan="7"><div class="ewpm-backup-details">';
+
+				if ( b.metadata ) {
+					var m = b.metadata;
+					var s = m.source || {};
+					html += '<table class="ewpm-preview-table">';
+					html += '<tr><td>Source URL</td><td>' + escHtml( s.site_url || '' ) + '</td></tr>';
+					html += '<tr><td>WP Version</td><td>' + escHtml( s.wp_version || '' ) + '</td></tr>';
+					html += '<tr><td>PHP</td><td>' + escHtml( s.php_version || '' ) + '</td></tr>';
+					html += '<tr><td>Plugin Version</td><td>' + escHtml( m.plugin_version || '' ) + '</td></tr>';
+					html += '<tr><td>Tables</td><td>' + ( m.stats?.db_tables || 0 ) + '</td></tr>';
+					html += '<tr><td>DB Rows</td><td>' + ( m.stats?.db_rows || 0 ).toLocaleString() + '</td></tr>';
+					html += '<tr><td>Files</td><td>' + ( m.stats?.total_files || 0 ).toLocaleString() + '</td></tr>';
+					html += '</table>';
+				} else {
+					html += '<p>Metadata: ' + escHtml( b.metadata_error || 'unreadable' ) + '</p>';
+				}
+
+				html += '</div></td></tr>';
+			} );
+
+			html += '</tbody></table>';
+			container.innerHTML = html;
+
+			// Bind row events.
+			container.querySelectorAll( '.ewpm-backup-filename' ).forEach( function ( el ) {
+				el.style.cursor = 'pointer';
+				el.addEventListener( 'click', function () {
+					var fn = el.closest( 'tr' ).dataset.filename;
+					var detail = container.querySelector( 'tr[data-detail-for="' + fn + '"]' );
+					if ( detail ) { detail.style.display = detail.style.display === 'none' ? '' : 'none'; }
+				} );
+			} );
+
+			container.querySelectorAll( '.ewpm-backup-restore' ).forEach( function ( btn ) {
+				btn.addEventListener( 'click', function () {
+					EWPM.Backups.restoreTarget = { path: btn.dataset.path, row: btn.closest( 'tr' ) };
+					EWPM.Backups.showRestoreModal();
+				} );
+			} );
+
+			container.querySelectorAll( '.ewpm-backup-delete' ).forEach( function ( btn ) {
+				btn.addEventListener( 'click', function () {
+					EWPM.Backups.showDeleteModal( btn.dataset.filename, btn.closest( 'tr' ) );
+				} );
+			} );
+
+			// Select all checkbox.
+			var selectAll = document.getElementById( 'ewpm-backups-select-all' );
+			if ( selectAll ) {
+				selectAll.addEventListener( 'change', function () {
+					container.querySelectorAll( '.ewpm-backup-check' ).forEach( function ( cb ) { cb.checked = selectAll.checked; } );
+					EWPM.Backups.updateBulkBar();
+				} );
+			}
+
+			container.querySelectorAll( '.ewpm-backup-check' ).forEach( function ( cb ) {
+				cb.addEventListener( 'change', function () { EWPM.Backups.updateBulkBar(); } );
+			} );
+		},
+
+		updateSummary: function ( backups ) {
+			var total = backups.reduce( function ( sum, b ) { return sum + b.size_bytes; }, 0 );
+			var el = document.getElementById( 'ewpm-backups-storage-summary' );
+			if ( el ) { el.textContent = backups.length + ' backups using ' + formatBytes( total ); }
+		},
+
+		updateBulkBar: function () {
+			var checked = document.querySelectorAll( '.ewpm-backup-check:checked' );
+			var bar     = document.querySelector( '.ewpm-backups-bulk' );
+			var count   = document.getElementById( 'ewpm-backups-selected-count' );
+
+			if ( checked.length > 0 ) {
+				bar.style.display = 'flex';
+				count.textContent = checked.length + ' selected';
+			} else {
+				bar.style.display = 'none';
+			}
+		},
+
+		bindFilters: function () {
+			var self    = this;
+			var radios  = document.querySelectorAll( 'input[name="ewpm_backup_filter"]' );
+			var search  = document.getElementById( 'ewpm-backups-search' );
+
+			function applyFilter() {
+				var filter = document.querySelector( 'input[name="ewpm_backup_filter"]:checked' );
+				var query  = search ? search.value.toLowerCase() : '';
+				var filtered = self.allBackups.filter( function ( b ) {
+					if ( filter && filter.value === 'user' && b.is_auto_snapshot ) { return false; }
+					if ( filter && filter.value === 'auto' && ! b.is_auto_snapshot ) { return false; }
+					if ( query && b.filename.toLowerCase().indexOf( query ) === -1 ) { return false; }
+					return true;
+				} );
+				self.renderList( filtered );
+			}
+
+			radios.forEach( function ( r ) { r.addEventListener( 'change', applyFilter ); } );
+			if ( search ) { search.addEventListener( 'input', applyFilter ); }
+		},
+
+		showRestoreModal: function () {
+			var modal      = document.getElementById( 'ewpm-restore-modal' );
+			var confirmBtn = document.getElementById( 'ewpm-restore-modal-confirm' );
+			var input      = document.getElementById( 'ewpm-restore-confirm-input' );
+			modal.style.display = 'flex';
+			modal.querySelectorAll( '.ewpm-restore-check' ).forEach( function ( cb ) { cb.checked = false; } );
+			input.value = '';
+			confirmBtn.disabled = true;
+		},
+
+		bindRestoreModal: function () {
+			var modal      = document.getElementById( 'ewpm-restore-modal' );
+			var confirmBtn = document.getElementById( 'ewpm-restore-modal-confirm' );
+			var cancelBtn  = document.getElementById( 'ewpm-restore-modal-cancel' );
+			var input      = document.getElementById( 'ewpm-restore-confirm-input' );
+			if ( ! modal ) { return; }
+
+			function update() {
+				var allChecked = true;
+				modal.querySelectorAll( '.ewpm-restore-check' ).forEach( function ( cb ) { if ( ! cb.checked ) { allChecked = false; } } );
+				confirmBtn.disabled = ! ( allChecked && input.value === 'IMPORT' );
+			}
+
+			modal.querySelectorAll( '.ewpm-restore-check' ).forEach( function ( cb ) { cb.addEventListener( 'change', update ); } );
+			input.addEventListener( 'input', update );
+			cancelBtn.addEventListener( 'click', function () { modal.style.display = 'none'; } );
+
+			confirmBtn.addEventListener( 'click', function () {
+				modal.style.display = 'none';
+				EWPM.Backups.runRestore();
+			} );
+		},
+
+		runRestore: function () {
+			var target    = this.restoreTarget;
+			if ( ! target ) { return; }
+
+			var row       = target.row;
+			var progEl    = row.querySelector( '.ewpm-backup-row-progress' );
+			var resultEl  = row.querySelector( '.ewpm-backup-row-result' );
+			var doSnap    = document.getElementById( 'ewpm-restore-auto-snapshot' ).checked;
+
+			progEl.style.display = 'block';
+			progEl.innerHTML     = '';
+			resultEl.style.display = 'none';
+
+			( async function () {
+				try {
+					var snapFilename = null;
+					if ( doSnap ) {
+						EWPM.UI.renderProgress( progEl, { phase_label: 'Creating safety snapshot...', progress_percent: 0, progress_label: 'Backing up before restore...' } );
+						var snapResult = await EWPM.Import.runSnapshot( progEl );
+						snapFilename = snapResult.filename;
+					}
+
+					await new Promise( function ( resolve, reject ) {
+						EWPM.Job.start( {
+							job_type: 'import',
+							params: { archive_path: target.path, conflict_strategy: 'overwrite', replace_paths: false, stop_on_db_error: false },
+							onProgress: function ( data ) { EWPM.UI.renderProgress( progEl, data ); },
+							onDone: function ( result ) {
+								progEl.style.display = 'none';
+								resultEl.style.display = 'block';
+								resultEl.className = 'ewpm-backup-row-result ewpm-dev-result ewpm-dev-result--success';
+								var html = '<strong>Restore complete!</strong> ' + ( result.db_statements || 0 ) + ' statements, ' + ( result.files_extracted || 0 ) + ' files.';
+								if ( snapFilename ) { html += ' Snapshot: ' + escHtml( snapFilename ); }
+								resultEl.innerHTML = html;
+								resolve( result );
+							},
+							onError: function ( err ) {
+								progEl.style.display = 'none';
+								resultEl.style.display = 'block';
+								resultEl.className = 'ewpm-backup-row-result ewpm-dev-result ewpm-dev-result--error';
+								resultEl.innerHTML = 'Restore failed: ' + escHtml( err.message );
+								if ( snapFilename ) { resultEl.innerHTML += '<br>Safety snapshot: ' + escHtml( snapFilename ); }
+								reject( err );
+							},
+							onCancel: function () {
+								progEl.style.display = 'none';
+								resultEl.style.display = 'block';
+								resultEl.className = 'ewpm-backup-row-result ewpm-dev-result ewpm-dev-result--error';
+								resultEl.textContent = 'Restore cancelled.';
+								resolve();
+							},
+						} );
+					} );
+				} catch ( err ) {
+					resultEl.style.display = 'block';
+					resultEl.className = 'ewpm-backup-row-result ewpm-dev-result ewpm-dev-result--error';
+					resultEl.innerHTML = 'Error: ' + escHtml( err.message );
+				}
+			} )();
+		},
+
+		deleteTarget: null,
+		deleteRow: null,
+
+		showDeleteModal: function ( filename, row ) {
+			this.deleteTarget = filename;
+			this.deleteRow    = row;
+			var modal = document.getElementById( 'ewpm-delete-modal' );
+			document.getElementById( 'ewpm-delete-modal-message' ).textContent = 'Delete "' + filename + '" permanently? This cannot be undone.';
+			modal.style.display = 'flex';
+		},
+
+		bindDeleteModal: function () {
+			var modal      = document.getElementById( 'ewpm-delete-modal' );
+			var confirmBtn = document.getElementById( 'ewpm-delete-modal-confirm' );
+			var cancelBtn  = document.getElementById( 'ewpm-delete-modal-cancel' );
+			if ( ! modal ) { return; }
+
+			cancelBtn.addEventListener( 'click', function () { modal.style.display = 'none'; } );
+			confirmBtn.addEventListener( 'click', function () {
+				modal.style.display = 'none';
+				var fn  = EWPM.Backups.deleteTarget;
+				var row = EWPM.Backups.deleteRow;
+
+				ajaxPost( 'ewpm_delete_backup', { filename: fn } ).then( function () {
+					if ( row ) { row.style.opacity = '0.3'; setTimeout( function () { row.remove(); var detailRow = document.querySelector( 'tr[data-detail-for="' + fn + '"]' ); if ( detailRow ) { detailRow.remove(); } }, 300 ); }
+					EWPM.Backups.allBackups = EWPM.Backups.allBackups.filter( function ( b ) { return b.filename !== fn; } );
+					EWPM.Backups.updateSummary( EWPM.Backups.allBackups );
+				} ).catch( function ( err ) {
+					alert( 'Delete failed: ' + err.message ); // eslint-disable-line no-alert
+				} );
+			} );
+		},
+
+		bindBulkDelete: function () {
+			var btn = document.getElementById( 'ewpm-backups-bulk-delete' );
+			if ( ! btn ) { return; }
+
+			btn.addEventListener( 'click', function () {
+				var checked = document.querySelectorAll( '.ewpm-backup-check:checked' );
+				var names   = Array.from( checked ).map( function ( cb ) { return cb.value; } );
+				if ( names.length === 0 ) { return; }
+				if ( ! confirm( 'Delete ' + names.length + ' backup(s) permanently?' ) ) { return; } // eslint-disable-line no-alert
+
+				ajaxPost( 'ewpm_delete_backups_bulk', { filenames: names } ).then( function ( data ) {
+					data.deleted.forEach( function ( fn ) {
+						var row = document.querySelector( 'tr[data-filename="' + fn + '"]' );
+						if ( row ) { row.remove(); }
+						var detail = document.querySelector( 'tr[data-detail-for="' + fn + '"]' );
+						if ( detail ) { detail.remove(); }
+					} );
+					EWPM.Backups.allBackups = EWPM.Backups.allBackups.filter( function ( b ) { return ! data.deleted.includes( b.filename ); } );
+					EWPM.Backups.updateSummary( EWPM.Backups.allBackups );
+					EWPM.Backups.updateBulkBar();
+
+					if ( data.failed.length > 0 ) {
+						alert( 'Some deletes failed: ' + data.failed.map( function ( f ) { return f.filename + ': ' + f.error; } ).join( '\n' ) ); // eslint-disable-line no-alert
+					}
+				} );
+			} );
+		},
+
+		bindCleanup: function () {
+			var btn    = document.getElementById( 'ewpm-run-cleanup-now' );
+			var result = document.getElementById( 'ewpm-cleanup-result' );
+			if ( ! btn ) { return; }
+
+			btn.addEventListener( 'click', function () {
+				btn.disabled = true;
+				ajaxPost( 'ewpm_run_cleanup_now', {} ).then( function ( data ) {
+					btn.disabled = false;
+					result.textContent = 'Cleaned up ' + data.deleted.length + ' auto-snapshot(s), freed ' + data.freed_human + '.';
+					if ( data.deleted.length > 0 ) { EWPM.Backups.loadList(); }
+				} ).catch( function ( err ) {
+					btn.disabled = false;
+					result.textContent = 'Error: ' + err.message;
+				} );
+			} );
+		},
+	};
+
+	/* ------------------------------------------------------------------ */
 	/*  Auto-init on DOMContentLoaded                                      */
 	/* ------------------------------------------------------------------ */
 
 	document.addEventListener( 'DOMContentLoaded', function () {
 		EWPM.Export.init();
 		EWPM.Import.init();
+		EWPM.Backups.init();
 	} );
 
 } )();
