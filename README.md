@@ -20,7 +20,7 @@ Lightweight WordPress site migration and backup tool. Export your entire site to
 - [x] Phase 6: Importer (database restore + file extraction)
 - [x] Phase 7: Admin UI for export and import with progress
 - [x] Phase 8: Backup management (list, restore, delete)
-- [ ] Phase 9: Download and file-size handling
+- [x] Phase 9: URL migration source side (signed migration links + file serving)
 - [ ] Phase 10: Pull from URL (migration link generation + remote pull)
 - [ ] Phase 11: Polish, testing, and WordPress.org submission
 

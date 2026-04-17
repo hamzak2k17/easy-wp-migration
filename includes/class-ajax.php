@@ -37,6 +37,10 @@ class EWPM_Ajax {
 		add_action( 'wp_ajax_ewpm_delete_backup', [ $this, 'handle_delete_backup' ] );
 		add_action( 'wp_ajax_ewpm_delete_backups_bulk', [ $this, 'handle_delete_backups_bulk' ] );
 		add_action( 'wp_ajax_ewpm_run_cleanup_now', [ $this, 'handle_run_cleanup_now' ] );
+		add_action( 'wp_ajax_ewpm_generate_migration_link', [ $this, 'handle_generate_migration_link' ] );
+		add_action( 'wp_ajax_ewpm_list_migration_links', [ $this, 'handle_list_migration_links' ] );
+		add_action( 'wp_ajax_ewpm_revoke_migration_link', [ $this, 'handle_revoke_migration_link' ] );
+		add_action( 'wp_ajax_ewpm_revoke_all_migration_links', [ $this, 'handle_revoke_all_migration_links' ] );
 
 		// Dev-only endpoints — registered conditionally.
 		if ( true === EWPM_DEV_MODE ) {
@@ -449,6 +453,92 @@ class EWPM_Ajax {
 			'deleted'      => $result['deleted'],
 			'freed_bytes'  => $result['freed_bytes'],
 			'freed_human'  => size_format( $result['freed_bytes'] ),
+		] );
+	}
+
+	/**
+	 * Generate a migration link for a backup.
+	 */
+	public function handle_generate_migration_link(): void {
+		$this->verify_request();
+
+		$filename    = sanitize_file_name( wp_unslash( $_POST['filename'] ?? '' ) );
+		$ttl_seconds = (int) ( $_POST['ttl_seconds'] ?? 86400 );
+
+		try {
+			$tokens = new EWPM_Migration_Tokens();
+			$result = $tokens->generate( $filename, $ttl_seconds );
+			wp_send_json_success( $result );
+		} catch ( \Exception $e ) {
+			wp_send_json_error( [ 'error' => $e->getMessage() ], 400 );
+		}
+	}
+
+	/**
+	 * List migration links with computed status.
+	 */
+	public function handle_list_migration_links(): void {
+		$this->verify_request();
+
+		$tokens   = new EWPM_Migration_Tokens();
+		$registry = $tokens->get_registry();
+		$now      = time();
+		$result   = [];
+
+		foreach ( $registry as $entry ) {
+			$status = 'Active';
+
+			if ( ! empty( $entry['revoked'] ) ) {
+				$status = 'Revoked';
+			} elseif ( ( $entry['expires_at'] ?? 0 ) < $now ) {
+				$status = 'Expired';
+			} elseif ( ! file_exists( ewpm_get_backups_dir() . ( $entry['filename'] ?? '' ) ) ) {
+				$status = 'File Missing';
+			}
+
+			$entry['status'] = $status;
+			$result[]        = $entry;
+		}
+
+		// Newest first.
+		usort( $result, fn( $a, $b ) => ( $b['created_at'] ?? 0 ) - ( $a['created_at'] ?? 0 ) );
+
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * Revoke a single migration link.
+	 */
+	public function handle_revoke_migration_link(): void {
+		$this->verify_request();
+
+		$tid = sanitize_text_field( wp_unslash( $_POST['tid'] ?? '' ) );
+
+		$tokens = new EWPM_Migration_Tokens();
+
+		if ( $tokens->revoke( $tid ) ) {
+			wp_send_json_success( [ 'revoked' => true ] );
+		} else {
+			wp_send_json_error( [ 'error' => __( 'Link not found or already revoked.', 'easy-wp-migration' ) ], 400 );
+		}
+	}
+
+	/**
+	 * Revoke all migration links by regenerating the secret.
+	 */
+	public function handle_revoke_all_migration_links(): void {
+		$this->verify_request();
+
+		$tokens = new EWPM_Migration_Tokens();
+		$count  = $tokens->revoke_all();
+
+		wp_send_json_success( [
+			'revoked_count' => $count,
+			'message'       => sprintf(
+				/* translators: %d: count */
+				__( '%d active link(s) invalidated.', 'easy-wp-migration' ),
+				$count
+			),
 		] );
 	}
 

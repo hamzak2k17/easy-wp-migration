@@ -1016,7 +1016,8 @@
 
 				var dlUrl = config.ajaxUrl + '?action=ewpm_download_archive&backup_filename=' + encodeURIComponent( b.filename ) + '&_wpnonce=' + downloadNonce;
 				html += '<a href="' + dlUrl + '" class="button button-small">Download</a> ';
-				html += '<button class="button button-small ewpm-backup-delete" data-filename="' + escHtml( b.filename ) + '">Delete</button>';
+				html += '<button class="button button-small ewpm-backup-delete" data-filename="' + escHtml( b.filename ) + '">Delete</button> ';
+				html += '<button class="button button-small ewpm-backup-miglink" data-filename="' + escHtml( b.filename ) + '">Migration Link</button>';
 				html += '<div class="ewpm-backup-row-progress" style="display:none;"></div>';
 				html += '<div class="ewpm-backup-row-result" style="display:none;"></div>';
 				html += '</td></tr>';
@@ -1067,6 +1068,12 @@
 			container.querySelectorAll( '.ewpm-backup-delete' ).forEach( function ( btn ) {
 				btn.addEventListener( 'click', function () {
 					EWPM.Backups.showDeleteModal( btn.dataset.filename, btn.closest( 'tr' ) );
+				} );
+			} );
+
+			container.querySelectorAll( '.ewpm-backup-miglink' ).forEach( function ( btn ) {
+				btn.addEventListener( 'click', function () {
+					EWPM.MigLinks.showGenerateModal( btn.dataset.filename );
 				} );
 			} );
 
@@ -1299,6 +1306,198 @@
 	};
 
 	/* ------------------------------------------------------------------ */
+	/*  EWPM.MigLinks — migration link management                         */
+	/* ------------------------------------------------------------------ */
+
+	EWPM.MigLinks = {
+		init: function () {
+			if ( ! document.getElementById( 'ewpm-backups-page' ) ) { return; }
+			this.bindGenerateModal();
+			this.bindRevokeAll();
+			this.loadLinks();
+		},
+
+		showGenerateModal: function ( filename ) {
+			var modal = document.getElementById( 'ewpm-miglink-modal' );
+			document.getElementById( 'ewpm-miglink-filename' ).textContent = filename;
+			document.getElementById( 'ewpm-miglink-form' ).style.display = 'block';
+			document.getElementById( 'ewpm-miglink-result' ).style.display = 'none';
+			modal.dataset.filename = filename;
+			modal.style.display = 'flex';
+		},
+
+		bindGenerateModal: function () {
+			var modal       = document.getElementById( 'ewpm-miglink-modal' );
+			var cancelBtn   = document.getElementById( 'ewpm-miglink-modal-cancel' );
+			var generateBtn = document.getElementById( 'ewpm-miglink-generate' );
+			var doneBtn     = document.getElementById( 'ewpm-miglink-done' );
+			var copyBtn     = document.getElementById( 'ewpm-miglink-copy' );
+			var expirySelect = document.getElementById( 'ewpm-miglink-expiry' );
+			var customWrap   = document.getElementById( 'ewpm-miglink-custom-wrap' );
+			var longWarning  = document.getElementById( 'ewpm-miglink-long-warning' );
+
+			if ( ! modal ) { return; }
+
+			expirySelect.addEventListener( 'change', function () {
+				customWrap.style.display = expirySelect.value === 'custom' ? 'inline' : 'none';
+				longWarning.style.display = ( expirySelect.value === '604800' || expirySelect.value === 'custom' ) ? 'block' : 'none';
+			} );
+
+			cancelBtn.addEventListener( 'click', function () { modal.style.display = 'none'; } );
+			doneBtn.addEventListener( 'click', function () { modal.style.display = 'none'; EWPM.MigLinks.loadLinks(); } );
+
+			generateBtn.addEventListener( 'click', function () {
+				var ttl;
+				if ( expirySelect.value === 'custom' ) {
+					var val  = parseInt( document.getElementById( 'ewpm-miglink-custom-val' ).value, 10 ) || 24;
+					var unit = parseInt( document.getElementById( 'ewpm-miglink-custom-unit' ).value, 10 ) || 3600;
+					ttl = val * unit;
+				} else {
+					ttl = parseInt( expirySelect.value, 10 );
+				}
+
+				generateBtn.disabled = true;
+
+				ajaxPost( 'ewpm_generate_migration_link', {
+					filename: modal.dataset.filename,
+					ttl_seconds: ttl,
+				} ).then( function ( data ) {
+					generateBtn.disabled = false;
+					document.getElementById( 'ewpm-miglink-form' ).style.display = 'none';
+					document.getElementById( 'ewpm-miglink-result' ).style.display = 'block';
+					document.getElementById( 'ewpm-miglink-url' ).value = data.url_pretty;
+					document.getElementById( 'ewpm-miglink-url-fallback' ).value = data.url_fallback;
+
+					EWPM.MigLinks.startCountdown( data.expires_at );
+				} ).catch( function ( err ) {
+					generateBtn.disabled = false;
+					alert( 'Error: ' + err.message ); // eslint-disable-line no-alert
+				} );
+			} );
+
+			copyBtn.addEventListener( 'click', function () {
+				var url = document.getElementById( 'ewpm-miglink-url' ).value;
+				if ( navigator.clipboard ) {
+					navigator.clipboard.writeText( url ).then( function () {
+						copyBtn.textContent = 'Copied!';
+						setTimeout( function () { copyBtn.textContent = 'Copy'; }, 2000 );
+					} );
+				} else {
+					var input = document.getElementById( 'ewpm-miglink-url' );
+					input.select();
+					document.execCommand( 'copy' );
+					copyBtn.textContent = 'Copied!';
+					setTimeout( function () { copyBtn.textContent = 'Copy'; }, 2000 );
+				}
+			} );
+		},
+
+		startCountdown: function ( expiresAt ) {
+			var el = document.getElementById( 'ewpm-miglink-expiry-countdown' );
+			function update() {
+				var remaining = expiresAt - Math.floor( Date.now() / 1000 );
+				if ( remaining <= 0 ) { el.textContent = 'Expired'; return; }
+				var h = Math.floor( remaining / 3600 );
+				var m = Math.floor( ( remaining % 3600 ) / 60 );
+				el.textContent = 'Expires in: ' + h + 'h ' + m + 'm';
+				setTimeout( update, 30000 );
+			}
+			update();
+		},
+
+		loadLinks: function () {
+			var container = document.getElementById( 'ewpm-miglinks-table-container' );
+			var badge     = document.getElementById( 'ewpm-miglinks-badge' );
+			var details   = document.getElementById( 'ewpm-miglinks-details' );
+
+			if ( ! container ) { return; }
+
+			ajaxPost( 'ewpm_list_migration_links', {} ).then( function ( data ) {
+				if ( ! data || data.length === 0 ) {
+					container.innerHTML = '<p>No migration links generated yet.</p>';
+					badge.style.display = 'none';
+					return;
+				}
+
+				var active = data.filter( function ( l ) { return l.status === 'Active'; } ).length;
+				if ( active > 0 ) {
+					badge.textContent = ' (' + active + ' active)';
+					badge.style.display = 'inline';
+					details.open = true;
+				} else {
+					badge.style.display = 'none';
+				}
+
+				var html = '<table class="ewpm-backups-table"><thead><tr>';
+				html += '<th>Status</th><th>Filename</th><th>Created</th><th>Expires</th><th>Accessed</th><th>Actions</th>';
+				html += '</tr></thead><tbody>';
+
+				data.forEach( function ( l ) {
+					var statusCls = { Active: 'ewpm-status--active', Expired: 'ewpm-status--expired', Revoked: 'ewpm-status--revoked', 'File Missing': 'ewpm-status--missing' }[ l.status ] || '';
+
+					var expiresIn = '';
+					var remaining = ( l.expires_at || 0 ) - Math.floor( Date.now() / 1000 );
+					if ( l.status === 'Active' ) {
+						var h = Math.floor( remaining / 3600 );
+						var m = Math.floor( ( remaining % 3600 ) / 60 );
+						expiresIn = h + 'h ' + m + 'm';
+					} else if ( l.status === 'Expired' ) {
+						expiresIn = 'expired';
+					} else {
+						expiresIn = '—';
+					}
+
+					var created = new Date( ( l.created_at || 0 ) * 1000 ).toLocaleString();
+					var accessed = l.access_count ? l.access_count + 'x' + ( l.last_access_ip ? ' (' + l.last_access_ip + ')' : '' ) : '—';
+
+					html += '<tr>';
+					html += '<td><span class="ewpm-status-badge ' + statusCls + '">' + escHtml( l.status ) + '</span></td>';
+					html += '<td class="ewpm-backup-filename">' + escHtml( l.filename || '' ) + '</td>';
+					html += '<td>' + escHtml( created ) + '</td>';
+					html += '<td>' + escHtml( expiresIn ) + '</td>';
+					html += '<td>' + accessed + '</td>';
+					html += '<td>';
+					if ( l.status === 'Active' ) {
+						html += '<button class="button button-small ewpm-miglink-revoke" data-tid="' + escHtml( l.tid ) + '">Revoke</button>';
+					}
+					html += '</td></tr>';
+				} );
+
+				html += '</tbody></table>';
+				container.innerHTML = html;
+
+				container.querySelectorAll( '.ewpm-miglink-revoke' ).forEach( function ( btn ) {
+					btn.addEventListener( 'click', function () {
+						btn.disabled = true;
+						ajaxPost( 'ewpm_revoke_migration_link', { tid: btn.dataset.tid } ).then( function () {
+							EWPM.MigLinks.loadLinks();
+						} ).catch( function ( err ) {
+							btn.disabled = false;
+							alert( 'Revoke failed: ' + err.message ); // eslint-disable-line no-alert
+						} );
+					} );
+				} );
+			} ).catch( function () {
+				container.innerHTML = '<p>Failed to load migration links.</p>';
+			} );
+		},
+
+		bindRevokeAll: function () {
+			var btn = document.getElementById( 'ewpm-revoke-all-links' );
+			if ( ! btn ) { return; }
+
+			btn.addEventListener( 'click', function () {
+				if ( ! confirm( 'Revoke ALL migration links? This regenerates the secret key and instantly invalidates every existing link.' ) ) { return; } // eslint-disable-line no-alert
+
+				ajaxPost( 'ewpm_revoke_all_migration_links', {} ).then( function ( data ) {
+					alert( data.message || 'All links revoked.' ); // eslint-disable-line no-alert
+					EWPM.MigLinks.loadLinks();
+				} );
+			} );
+		},
+	};
+
+	/* ------------------------------------------------------------------ */
 	/*  Auto-init on DOMContentLoaded                                      */
 	/* ------------------------------------------------------------------ */
 
@@ -1306,6 +1505,7 @@
 		EWPM.Export.init();
 		EWPM.Import.init();
 		EWPM.Backups.init();
+		EWPM.MigLinks.init();
 	} );
 
 } )();

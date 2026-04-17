@@ -5,6 +5,21 @@ All notable changes to Easy WP Migration will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-04-17
+
+### Added
+
+- `EWPM_Migration_Tokens` — HMAC-SHA256 signed migration link generation with base64url-encoded JSON payloads, timing-safe signature validation via `hash_equals()`, per-link revocation, and secret regeneration for bulk revoke
+- `EWPM_Rate_Limiter` — transient-based sliding window rate limiting (20 requests/token/60s) applied before token validation
+- `EWPM_Migration_Endpoint` — public unauthenticated endpoint for serving backup files with HTTP Range support (206 Partial Content), chunked streaming, output buffer bypass, no cookies/sessions
+- Pretty URL route `ewpm-migrate/{token}` via rewrite rules with query-string fallback for broken rewrite hosts
+- Active migration links registry in `wp_options` with access tracking (count, IP, timestamp), revocation status, and automatic pruning of 30-day-old entries via daily cron
+- Backups tab: "Migration Link" button per backup row with expiry dropdown (1h / 24h / 7d / Custom), copy-to-clipboard, countdown timer, fallback URL display
+- Backups tab: "Migration Links" collapsible section showing all links with status badges (Active/Expired/Revoked/File Missing), access stats, and per-link Revoke action
+- "Revoke all links" button regenerating HMAC secret to instantly invalidate all existing links
+- AJAX endpoints: `ewpm_generate_migration_link`, `ewpm_list_migration_links`, `ewpm_revoke_migration_link`, `ewpm_revoke_all_migration_links`
+- Rewrite rules flushed on activation/deactivation and on plugin version change
+
 ## [0.8.0] — 2026-04-17
 
 ### Added

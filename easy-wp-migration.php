@@ -3,7 +3,7 @@
  * Plugin Name: Easy WP Migration
  * Plugin URI:  https://wordpress.org/plugins/easy-wp-migration/
  * Description: Lightweight site migration and backup tool. Export, import, pull from URL, and manage server-side backups.
- * Version:     0.8.0
+ * Version:     0.9.0
  * Requires at least: 6.2
  * Requires PHP: 8.1
  * Author:      DotClick LLC
@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'EWPM_VERSION', '0.8.0' );
+define( 'EWPM_VERSION', '0.9.0' );
 define( 'EWPM_PLUGIN_FILE', __FILE__ );
 define( 'EWPM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EWPM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -120,6 +120,9 @@ register_activation_hook( __FILE__, function (): void {
 	if ( ! wp_next_scheduled( 'ewpm_daily_cleanup' ) ) {
 		wp_schedule_event( time(), 'daily', 'ewpm_daily_cleanup' );
 	}
+
+	// Flush rewrite rules so migration endpoint pretty URLs work.
+	flush_rewrite_rules( false );
 } );
 
 /**
@@ -131,6 +134,9 @@ register_deactivation_hook( __FILE__, function (): void {
 	if ( $timestamp ) {
 		wp_unschedule_event( $timestamp, 'ewpm_daily_cleanup' );
 	}
+
+	// Flush rewrite rules to remove our migration endpoint route.
+	flush_rewrite_rules( false );
 } );
 
 /**
@@ -140,8 +146,14 @@ add_action( 'ewpm_daily_cleanup', function (): void {
 	$backups = new EWPM_Backups();
 	$backups->cleanup_expired_auto_snapshots( EWPM_AUTO_SNAPSHOT_RETENTION_DAYS );
 	EWPM_State::cleanup_stale( 24 );
+	( new EWPM_Migration_Tokens() )->prune_registry( 30 );
 	update_option( 'ewpm_last_auto_cleanup', gmdate( 'Y-m-d H:i:s' ) . ' UTC' );
 } );
+
+/**
+ * Initialize the public migration endpoint.
+ */
+EWPM_Migration_Endpoint::init();
 
 /**
  * Boot the plugin.

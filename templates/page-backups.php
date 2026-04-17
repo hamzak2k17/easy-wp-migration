@@ -112,6 +112,88 @@ defined( 'ABSPATH' ) || exit;
 			</div>
 		</div>
 
+		<!-- Generate Migration Link modal -->
+		<div id="ewpm-miglink-modal" class="ewpm-modal" style="display:none;">
+			<div class="ewpm-modal__backdrop"></div>
+			<div class="ewpm-modal__content">
+				<h2 class="ewpm-modal__title" style="color: #1d2327;"><?php esc_html_e( 'Generate Migration Link', 'easy-wp-migration' ); ?></h2>
+
+				<div id="ewpm-miglink-form">
+					<p><strong id="ewpm-miglink-filename"></strong></p>
+
+					<label for="ewpm-miglink-expiry"><?php esc_html_e( 'Link expires in:', 'easy-wp-migration' ); ?></label>
+					<select id="ewpm-miglink-expiry">
+						<option value="3600"><?php esc_html_e( '1 hour', 'easy-wp-migration' ); ?></option>
+						<option value="86400" selected><?php esc_html_e( '24 hours', 'easy-wp-migration' ); ?></option>
+						<option value="604800"><?php esc_html_e( '7 days', 'easy-wp-migration' ); ?></option>
+						<option value="custom"><?php esc_html_e( 'Custom', 'easy-wp-migration' ); ?></option>
+					</select>
+
+					<span id="ewpm-miglink-custom-wrap" style="display:none;">
+						<input type="number" id="ewpm-miglink-custom-val" value="48" min="1" max="720" style="width:70px;">
+						<select id="ewpm-miglink-custom-unit">
+							<option value="3600"><?php esc_html_e( 'hours', 'easy-wp-migration' ); ?></option>
+							<option value="86400"><?php esc_html_e( 'days', 'easy-wp-migration' ); ?></option>
+						</select>
+					</span>
+
+					<p class="description" id="ewpm-miglink-long-warning" style="display:none; color: #dba617;">
+						<?php esc_html_e( 'Longer expiry means a larger window for unauthorized access if the link leaks.', 'easy-wp-migration' ); ?>
+					</p>
+
+					<div class="ewpm-modal__actions" style="margin-top: 16px;">
+						<button type="button" class="button" id="ewpm-miglink-modal-cancel"><?php esc_html_e( 'Cancel', 'easy-wp-migration' ); ?></button>
+						<button type="button" class="button button-primary" id="ewpm-miglink-generate"><?php esc_html_e( 'Generate', 'easy-wp-migration' ); ?></button>
+					</div>
+				</div>
+
+				<div id="ewpm-miglink-result" style="display:none;">
+					<p><?php esc_html_e( 'Migration link generated:', 'easy-wp-migration' ); ?></p>
+					<div style="display:flex; gap:8px; align-items:center;">
+						<input type="text" id="ewpm-miglink-url" class="large-text code" readonly>
+						<button type="button" class="button" id="ewpm-miglink-copy"><?php esc_html_e( 'Copy', 'easy-wp-migration' ); ?></button>
+					</div>
+					<p id="ewpm-miglink-expiry-countdown" style="margin-top: 8px; font-size: 13px; color: #50575e;"></p>
+					<p class="description" style="margin-top: 8px;">
+						<?php esc_html_e( 'This link grants unauthenticated access to a full site export including database and user data. Share only over secure channels.', 'easy-wp-migration' ); ?>
+					</p>
+					<details style="margin-top: 8px;">
+						<summary><?php esc_html_e( 'Alternative URL (for hosts without pretty permalinks)', 'easy-wp-migration' ); ?></summary>
+						<input type="text" id="ewpm-miglink-url-fallback" class="large-text code" readonly style="margin-top: 6px;">
+					</details>
+					<div class="ewpm-modal__actions" style="margin-top: 16px;">
+						<button type="button" class="button" id="ewpm-miglink-done"><?php esc_html_e( 'Close', 'easy-wp-migration' ); ?></button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Migration Links section -->
+		<div class="ewpm-import-section" id="ewpm-migration-links-section" style="margin-top: 24px;">
+			<details id="ewpm-miglinks-details">
+				<summary>
+					<strong><?php esc_html_e( 'Migration Links', 'easy-wp-migration' ); ?></strong>
+					<span id="ewpm-miglinks-badge" style="display:none;"></span>
+				</summary>
+
+				<div style="margin-top: 10px;">
+					<p class="description">
+						<?php esc_html_e( 'Migration links let other sites pull backups from this server. They expire automatically but can be revoked earlier.', 'easy-wp-migration' ); ?>
+					</p>
+
+					<div style="margin: 10px 0;">
+						<button type="button" class="button ewpm-cancel-btn" id="ewpm-revoke-all-links">
+							<?php esc_html_e( 'Revoke all links', 'easy-wp-migration' ); ?>
+						</button>
+					</div>
+
+					<div id="ewpm-miglinks-table-container">
+						<p><?php esc_html_e( 'Loading...', 'easy-wp-migration' ); ?></p>
+					</div>
+				</div>
+			</details>
+		</div>
+
 		<!-- Advanced section -->
 		<details class="ewpm-export-advanced" style="margin-top: 30px;">
 			<summary><?php esc_html_e( 'Advanced: Auto-snapshot cleanup', 'easy-wp-migration' ); ?></summary>
