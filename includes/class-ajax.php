@@ -217,7 +217,11 @@ class EWPM_Ajax {
 			wp_die( esc_html__( 'Insufficient permissions.', 'easy-wp-migration' ), 403 );
 		}
 
-		check_admin_referer( 'ewpm_download_archive' );
+		// Accept either ewpm_download_archive or ewpm_job nonce for flexibility.
+		if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'ewpm_download_archive' )
+			&& ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'ewpm_job' ) ) {
+			wp_die( esc_html__( 'Invalid security token.', 'easy-wp-migration' ), 403 );
+		}
 
 		$job_id   = sanitize_text_field( wp_unslash( $_GET['job_id'] ?? '' ) );
 		$filename = sanitize_file_name( wp_unslash( $_GET['backup_filename'] ?? '' ) );
