@@ -28,6 +28,12 @@ class EWPM_Ajax {
 		add_action( 'wp_ajax_ewpm_job_progress', [ $this, 'handle_job_progress' ] );
 		add_action( 'wp_ajax_ewpm_job_finalize', [ $this, 'handle_job_finalize' ] );
 		add_action( 'wp_ajax_ewpm_download_archive', [ $this, 'handle_download_archive' ] );
+		add_action( 'wp_ajax_ewpm_upload_start', [ $this, 'handle_upload_start' ] );
+		add_action( 'wp_ajax_ewpm_upload_chunk', [ $this, 'handle_upload_chunk' ] );
+		add_action( 'wp_ajax_ewpm_upload_finalize', [ $this, 'handle_upload_finalize' ] );
+		add_action( 'wp_ajax_ewpm_upload_abort', [ $this, 'handle_upload_abort' ] );
+		add_action( 'wp_ajax_ewpm_list_backups', [ $this, 'handle_list_backups' ] );
+		add_action( 'wp_ajax_ewpm_import_preview', [ $this, 'handle_import_preview' ] );
 
 		// Dev-only endpoints — registered conditionally.
 		if ( true === EWPM_DEV_MODE ) {
@@ -259,6 +265,221 @@ class EWPM_Ajax {
 
 		readfile( $real_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
 		exit;
+	}
+
+	/**
+	 * Start a chunked upload session.
+	 */
+	public function handle_upload_start(): void {
+		$this->verify_request();
+
+		$filename   = sanitize_file_name( wp_unslash( $_POST['filename'] ?? '' ) );
+		$total_size = (int) ( $_POST['total_size'] ?? 0 );
+
+		try {
+			$handler = new EWPM_Upload_Handler();
+			$result  = $handler->start_upload( $filename, $total_size );
+			wp_send_json_success( $result );
+		} catch ( \Exception $e ) {
+			wp_send_json_error( [ 'error' => $e->getMessage() ], 400 );
+		}
+	}
+
+	/**
+	 * Receive a single upload chunk.
+	 */
+	public function handle_upload_chunk(): void {
+		$this->verify_request();
+
+		$upload_id    = sanitize_text_field( wp_unslash( $_POST['upload_id'] ?? '' ) );
+		$chunk_index  = (int) ( $_POST['chunk_index'] ?? 0 );
+		$total_chunks = (int) ( $_POST['total_chunks'] ?? 0 );
+
+		if ( empty( $_FILES['chunk'] ) || ! is_uploaded_file( $_FILES['chunk']['tmp_name'] ) ) {
+			wp_send_json_error( [ 'error' => __( 'No chunk data received.', 'easy-wp-migration' ) ], 400 );
+		}
+
+		$chunk_data = file_get_contents( $_FILES['chunk']['tmp_name'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+
+		try {
+			$handler = new EWPM_Upload_Handler();
+			$result  = $handler->receive_chunk( $upload_id, $chunk_index, $total_chunks, $chunk_data );
+			wp_send_json_success( $result );
+		} catch ( \Exception $e ) {
+			wp_send_json_error( [ 'error' => $e->getMessage() ], 400 );
+		}
+	}
+
+	/**
+	 * Finalize a chunked upload.
+	 */
+	public function handle_upload_finalize(): void {
+		$this->verify_request();
+
+		$upload_id = sanitize_text_field( wp_unslash( $_POST['upload_id'] ?? '' ) );
+		$sha256    = sanitize_text_field( wp_unslash( $_POST['sha256'] ?? '' ) );
+
+		try {
+			$handler = new EWPM_Upload_Handler();
+			$result  = $handler->finalize_upload( $upload_id, $sha256 );
+			wp_send_json_success( $result );
+		} catch ( \Exception $e ) {
+			wp_send_json_error( [ 'error' => $e->getMessage() ], 400 );
+		}
+	}
+
+	/**
+	 * Abort a chunked upload.
+	 */
+	public function handle_upload_abort(): void {
+		$this->verify_request();
+
+		$upload_id = sanitize_text_field( wp_unslash( $_POST['upload_id'] ?? '' ) );
+
+		$handler = new EWPM_Upload_Handler();
+		$handler->abort_upload( $upload_id );
+
+		wp_send_json_success( [ 'aborted' => true ] );
+	}
+
+	/**
+	 * List backup archives in the backups/ folder.
+	 *
+	 * Returns filename, size, date, auto-snapshot flag.
+	 */
+	public function handle_list_backups(): void {
+		$this->verify_request();
+
+		$backups_dir = ewpm_get_backups_dir();
+		$result      = [];
+
+		if ( is_dir( $backups_dir ) ) {
+			$files = glob( $backups_dir . '*.' . EWPM_ARCHIVE_EXTENSION );
+
+			if ( $files ) {
+				foreach ( $files as $file ) {
+					$name = basename( $file );
+					$result[] = [
+						'filename'         => $name,
+						'path'             => $file,
+						'size_bytes'       => (int) filesize( $file ),
+						'size_human'       => size_format( filesize( $file ) ),
+						'mtime'            => filemtime( $file ),
+						'date'             => gmdate( 'Y-m-d H:i:s', filemtime( $file ) ),
+						'is_auto_snapshot' => str_starts_with( $name, 'auto-before-import-' ),
+					];
+				}
+
+				// Sort by date descending.
+				usort( $result, fn( $a, $b ) => $b['mtime'] - $a['mtime'] );
+			}
+		}
+
+		wp_send_json_success( $result );
+	}
+
+	/**
+	 * Preview an archive's metadata without starting an import.
+	 *
+	 * Takes archive_path (must be in backups/ or tmp/).
+	 */
+	public function handle_import_preview(): void {
+		$this->verify_request();
+
+		$archive_path = wp_unslash( $_POST['archive_path'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+		if ( empty( $archive_path ) || ! file_exists( $archive_path ) ) {
+			wp_send_json_error( [ 'error' => __( 'Archive file not found.', 'easy-wp-migration' ) ], 400 );
+		}
+
+		// Path safety: must be in tmp/ or backups/.
+		$real_path    = realpath( $archive_path );
+		$real_tmp     = realpath( ewpm_get_tmp_dir() );
+		$real_backups = realpath( ewpm_get_backups_dir() );
+		$allowed      = false;
+
+		if ( $real_path && $real_tmp && str_starts_with( $real_path, $real_tmp ) ) {
+			$allowed = true;
+		}
+		if ( $real_path && $real_backups && str_starts_with( $real_path, $real_backups ) ) {
+			$allowed = true;
+		}
+
+		if ( ! $allowed ) {
+			wp_send_json_error( [ 'error' => __( 'File path is outside the allowed directory.', 'easy-wp-migration' ) ], 403 );
+		}
+
+		try {
+			$archiver = EWPM_Archiver_Factory::create();
+			$archiver->open_for_read( $archive_path );
+			$metadata = $archiver->get_metadata();
+			$entries  = $archiver->list_entries();
+			$archiver->close();
+		} catch ( \Exception $e ) {
+			wp_send_json_error( [ 'error' => $e->getMessage() ], 400 );
+		}
+
+		$file_count = 0;
+		$file_bytes = 0;
+
+		foreach ( $entries as $entry ) {
+			if ( str_starts_with( $entry['path'], 'wp-content/' ) ) {
+				++$file_count;
+				$file_bytes += $entry['size'];
+			}
+		}
+
+		$source       = $metadata['source'] ?? [];
+		$components   = $metadata['components'] ?? [];
+		$stats        = $metadata['stats'] ?? [];
+		$current_url  = get_option( 'siteurl', '' );
+		$current_wp   = get_bloginfo( 'version' );
+		$current_php  = PHP_VERSION;
+		$url_differs  = rtrim( $source['site_url'] ?? '', '/' ) !== rtrim( $current_url, '/' );
+
+		$warnings = [];
+
+		if ( version_compare( $source['php_version'] ?? '0', $current_php, '>' ) ) {
+			$warnings[] = sprintf(
+				__( 'Source PHP (%1$s) is newer than destination (%2$s).', 'easy-wp-migration' ),
+				$source['php_version'],
+				$current_php
+			);
+		}
+
+		if ( version_compare( $source['wp_version'] ?? '0', $current_wp, '>' ) ) {
+			$warnings[] = sprintf(
+				__( 'Source WordPress (%1$s) is newer than destination (%2$s).', 'easy-wp-migration' ),
+				$source['wp_version'],
+				$current_wp
+			);
+		}
+
+		if ( version_compare( $metadata['plugin_version'] ?? '0', EWPM_VERSION, '>' ) ) {
+			$warnings[] = sprintf(
+				__( 'Archive created with newer plugin version (%1$s vs %2$s).', 'easy-wp-migration' ),
+				$metadata['plugin_version'],
+				EWPM_VERSION
+			);
+		}
+
+		wp_send_json_success( [
+			'source_url'      => $source['site_url'] ?? '',
+			'source_wp'       => $source['wp_version'] ?? '',
+			'source_php'      => $source['php_version'] ?? '',
+			'source_mysql'    => $source['mysql_version'] ?? '',
+			'source_prefix'   => $source['table_prefix'] ?? '',
+			'plugin_version'  => $metadata['plugin_version'] ?? '',
+			'components'      => $components,
+			'db_tables'       => $stats['db_tables'] ?? 0,
+			'db_rows'         => $stats['db_rows'] ?? 0,
+			'file_count'      => $file_count,
+			'file_bytes'      => $file_bytes,
+			'file_bytes_human' => size_format( $file_bytes ),
+			'url_differs'     => $url_differs,
+			'current_url'     => $current_url,
+			'warnings'        => $warnings,
+		] );
 	}
 
 	/**

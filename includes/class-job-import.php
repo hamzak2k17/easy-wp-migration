@@ -58,6 +58,7 @@ class EWPM_Job_Import extends EWPM_Job {
 			'file_plan'          => [],
 			'file_cursor'        => 0,
 			'file_stats'         => [ 'files_extracted' => 0, 'bytes_extracted' => 0, 'warnings' => [] ],
+			'pre_import_snapshot' => [],
 			'warnings'           => [],
 		];
 	}
@@ -161,6 +162,13 @@ class EWPM_Job_Import extends EWPM_Job {
 		}
 
 		$state['metadata'] = $metadata;
+
+		// Capture pre-import state for post-import comparison.
+		$state['pre_import_snapshot'] = [
+			'permalink_structure' => get_option( 'permalink_structure', '' ),
+			'stylesheet'          => get_option( 'stylesheet', '' ),
+			'active_plugins'      => get_option( 'active_plugins', [] ),
+		];
 
 		// Build URL replacements.
 		$source_url = rtrim( $metadata['source']['site_url'] ?? '', '/' );
@@ -430,10 +438,64 @@ class EWPM_Job_Import extends EWPM_Job {
 		);
 
 		// Flush rewrite rules.
-		flush_rewrite_rules();
+		flush_rewrite_rules( false );
 
 		// Clear object cache.
 		wp_cache_flush();
+
+		// Clear opcache if available.
+		if ( function_exists( 'opcache_reset' ) ) {
+			@opcache_reset(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		// Detect changes vs pre-import snapshot.
+		$snapshot = $state['pre_import_snapshot'] ?? [];
+
+		if ( ! empty( $snapshot ) ) {
+			$new_permalink = get_option( 'permalink_structure', '' );
+			$old_permalink = $snapshot['permalink_structure'] ?? '';
+
+			if ( $new_permalink !== $old_permalink ) {
+				$state['warnings'][] = sprintf(
+					/* translators: %s: permalink structure */
+					__( 'Permalink structure changed to "%s". If URLs 404, go to Settings > Permalinks and click Save.', 'easy-wp-migration' ),
+					$new_permalink
+				);
+			}
+
+			$new_theme = get_option( 'stylesheet', '' );
+			$old_theme = $snapshot['stylesheet'] ?? '';
+
+			if ( $new_theme !== $old_theme ) {
+				$state['warnings'][] = sprintf(
+					/* translators: %s: theme name */
+					__( 'Active theme changed to "%s". Verify it is installed and working.', 'easy-wp-migration' ),
+					$new_theme
+				);
+			}
+
+			$new_plugins = get_option( 'active_plugins', [] );
+			$old_plugins = $snapshot['active_plugins'] ?? [];
+
+			$added   = array_diff( $new_plugins, $old_plugins );
+			$removed = array_diff( $old_plugins, $new_plugins );
+
+			if ( ! empty( $added ) ) {
+				$state['warnings'][] = sprintf(
+					/* translators: %s: plugin list */
+					__( 'Plugins now active that were not before: %s', 'easy-wp-migration' ),
+					implode( ', ', $added )
+				);
+			}
+
+			if ( ! empty( $removed ) ) {
+				$state['warnings'][] = sprintf(
+					/* translators: %s: plugin list */
+					__( 'Plugins deactivated by import: %s', 'easy-wp-migration' ),
+					implode( ', ', $removed )
+				);
+			}
+		}
 
 		$state['done']             = true;
 		$state['progress_percent'] = 100;

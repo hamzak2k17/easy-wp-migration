@@ -202,6 +202,141 @@
 }
 
 /* ------------------------------------------------------------------ */
+/*  Import page                                                        */
+/* ------------------------------------------------------------------ */
+
+.ewpm-import-section {
+	margin-bottom: 20px;
+}
+
+.ewpm-import-source-tabs {
+	display: flex;
+	gap: 16px;
+	margin-bottom: 16px;
+}
+
+.ewpm-import-source-tab {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.ewpm-dropzone {
+	border: 2px dashed #c3c4c7;
+	border-radius: 8px;
+	padding: 40px;
+	text-align: center;
+	cursor: pointer;
+	transition: border-color 0.2s, background-color 0.2s;
+	color: #50575e;
+}
+
+.ewpm-dropzone:hover,
+.ewpm-dropzone--active {
+	border-color: #2271b1;
+	background: #f0f6fc;
+}
+
+.ewpm-preview-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+	margin-bottom: 12px;
+}
+
+.ewpm-preview-table td {
+	padding: 6px 10px;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.ewpm-preview-table td:first-child {
+	width: 160px;
+	color: #50575e;
+}
+
+.ewpm-import-preview-warnings {
+	background: #fcf9e8;
+	border: 1px solid #dba617;
+	border-radius: 4px;
+	padding: 10px 14px;
+	margin-top: 10px;
+	font-size: 13px;
+}
+
+.ewpm-import-preview-warnings p {
+	margin: 4px 0;
+}
+
+/* Modal */
+.ewpm-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 100100;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.ewpm-modal__backdrop {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.6);
+}
+
+.ewpm-modal__content {
+	position: relative;
+	background: #fff;
+	border-radius: 8px;
+	padding: 30px;
+	max-width: 560px;
+	width: 90%;
+	max-height: 85vh;
+	overflow-y: auto;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.ewpm-modal__title {
+	color: #d63638;
+	margin-top: 0;
+	font-size: 20px;
+}
+
+.ewpm-modal__checklist {
+	margin: 20px 0;
+}
+
+.ewpm-modal__checklist label {
+	display: block;
+	padding: 8px 0;
+	font-size: 14px;
+	cursor: pointer;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.ewpm-modal__confirm {
+	margin: 20px 0 16px;
+}
+
+.ewpm-modal__confirm input {
+	margin-top: 6px;
+	width: 120px;
+}
+
+.ewpm-modal__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Dev tools page                                                     */
 /* ------------------------------------------------------------------ */
 

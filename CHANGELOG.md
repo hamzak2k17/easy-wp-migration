@@ -5,6 +5,24 @@ All notable changes to Easy WP Migration will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-04-17
+
+### Added
+
+- Import tab UI replacing Phase 1 placeholder with full import workflow
+- Chunked file upload (`EWPM_Upload_Handler`) supporting files larger than PHP's `upload_max_filesize`: 1MB chunks, SHA-256 verification, stale .part cleanup
+- Drag-and-drop upload zone with fallback file input
+- Server backup picker dropdown via `ewpm_list_backups` endpoint
+- Pre-import preview via `ewpm_import_preview` endpoint: source URL, WP/PHP version, component breakdown, compatibility warnings
+- Consent modal with 4-checkbox data-loss acknowledgement + type-to-confirm IMPORT challenge
+- Auto-snapshot before import: triggers full site export to backups/ (reuses Phase 5 export job) with `auto-before-import-` prefix
+- Two-stage progress: snapshot phase (0-30%) then import phase (30-100%)
+- Post-import result screen with rollback instructions, snapshot filename, DB/file stats, warnings, and housekeeping checklist
+- Enhanced `post_import_fixup`: permalink structure change detection, theme change detection, plugin activation diff, opcache flush
+- Pre-import state snapshot capture in validate_archive phase for accurate post-import comparison
+- Page reload resume for import jobs via sessionStorage
+- Upload AJAX endpoints: `ewpm_upload_start`, `ewpm_upload_chunk`, `ewpm_upload_finalize`, `ewpm_upload_abort`
+
 ## [0.6.0] — 2026-04-17
 
 ### Added
