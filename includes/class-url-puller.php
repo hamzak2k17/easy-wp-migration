@@ -113,37 +113,37 @@ class EWPM_URL_Puller {
 		while ( microtime( true ) < $deadline ) {
 			$end = $cursor + $chunk_size - 1;
 
-			// Stream directly to a temp chunk file, then append to destination.
-			$chunk_tmp = $this->destination . '.chunk';
-
-			$response = wp_remote_get( $this->url, [
-				'timeout'    => min( 30, max( 5, (int) ( $deadline - microtime( true ) ) ) ),
-				'sslverify'  => ! ( defined( 'EWPM_PULL_ALLOW_INSECURE_SSL' ) && EWPM_PULL_ALLOW_INSECURE_SSL ),
-				'user-agent' => 'EasyWPMigration/' . EWPM_VERSION,
-				'headers'    => [
-					'Range'           => "bytes={$cursor}-{$end}",
-					'Accept-Encoding' => 'identity',
-				],
-				'decompress' => false,
-				'stream'     => true,
-				'filename'   => $chunk_tmp,
+			// Use curl directly for Range requests — wp_remote_get can
+			// interfere with Range headers on some server configs.
+			$ch = curl_init( $this->url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_init
+			curl_setopt_array( $ch, [ // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt_array
+				CURLOPT_RETURNTRANSFER => true,
+				CURLOPT_RANGE          => "{$cursor}-{$end}",
+				CURLOPT_TIMEOUT        => min( 30, max( 5, (int) ( $deadline - microtime( true ) ) ) ),
+				CURLOPT_USERAGENT      => 'EasyWPMigration/' . EWPM_VERSION,
+				CURLOPT_FOLLOWLOCATION => true,
+				CURLOPT_MAXREDIRS      => 5,
+				CURLOPT_SSL_VERIFYPEER => ! ( defined( 'EWPM_PULL_ALLOW_INSECURE_SSL' ) && EWPM_PULL_ALLOW_INSECURE_SSL ),
+				CURLOPT_ENCODING       => 'identity',
+				CURLOPT_HTTPHEADER     => [ 'Accept-Encoding: identity' ],
 			] );
 
-			if ( is_wp_error( $response ) ) {
-				@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			$body = curl_exec( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_exec
+			$code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo
+			$curl_error = curl_error( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_error
+			curl_close( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_close
+
+			if ( false === $body || ! empty( $curl_error ) ) {
 				return [
 					'cursor'        => $cursor,
 					'bytes_written' => $total_written,
 					'done'          => false,
-					'error'         => $response->get_error_message(),
+					'error'         => $curl_error ?: 'curl request failed',
 					'error_code'    => 'unreachable',
 				];
 			}
 
-			$code = wp_remote_retrieve_response_code( $response );
-
 			if ( 429 === $code ) {
-				@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				return [
 					'cursor'        => $cursor,
 					'bytes_written' => $total_written,
@@ -154,7 +154,6 @@ class EWPM_URL_Puller {
 			}
 
 			if ( $code >= 400 ) {
-				@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				$error_code = match ( true ) {
 					401 === $code, 403 === $code => 'unauthorized',
 					404 === $code => 'not_found',
@@ -171,11 +170,9 @@ class EWPM_URL_Puller {
 				];
 			}
 
-			// Read chunk from temp file, append to destination.
-			$chunk_bytes = file_exists( $chunk_tmp ) ? (int) filesize( $chunk_tmp ) : 0;
+			$chunk_bytes = strlen( $body );
 
 			if ( 0 === $chunk_bytes ) {
-				@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				return [
 					'cursor'        => $cursor,
 					'bytes_written' => $total_written,
@@ -185,10 +182,7 @@ class EWPM_URL_Puller {
 				];
 			}
 
-			// Append chunk to destination.
-			$chunk_data = file_get_contents( $chunk_tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
-			@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-
+			// Append to destination file.
 			$fh = fopen( $this->destination, 'ab' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 
 			if ( ! $fh ) {
@@ -201,13 +195,13 @@ class EWPM_URL_Puller {
 				];
 			}
 
-			fwrite( $fh, $chunk_data );
+			fwrite( $fh, $body );
 			fflush( $fh );
 			fclose( $fh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 
 			$cursor        += $chunk_bytes;
 			$total_written += $chunk_bytes;
-			unset( $chunk_data );
+			unset( $body );
 
 			// If we got fewer bytes than requested, we've reached EOF.
 			if ( $chunk_bytes < $chunk_size ) {
