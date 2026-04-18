@@ -117,22 +117,18 @@ class EWPM_URL_Puller {
 		while ( microtime( true ) < $deadline ) {
 			$end = $cursor + $chunk_size - 1;
 
-			// Use wp_remote_get for the pull. For the first chunk (cursor=0),
-			// try without Range header to avoid LiteSpeed caching conflicts.
-			// For subsequent chunks, use Range.
+			// Always use Range header for chunked downloads.
+			// Debug diagnostic confirmed Range works from test2→test1.
 			$request_args = [
 				'timeout'    => min( 60, max( 10, (int) ( $deadline - microtime( true ) ) ) ),
 				'sslverify'  => ! ( defined( 'EWPM_PULL_ALLOW_INSECURE_SSL' ) && EWPM_PULL_ALLOW_INSECURE_SSL ),
 				'user-agent' => 'EasyWPMigration/' . EWPM_VERSION,
-				'headers'    => [ 'Accept-Encoding' => 'identity' ],
+				'headers'    => [
+					'Accept-Encoding' => 'identity',
+					'Range'           => "bytes={$cursor}-{$end}",
+				],
 				'decompress' => false,
 			];
-
-			// Only use Range for resume (cursor > 0). First download
-			// gets the full file without Range to avoid server conflicts.
-			if ( $cursor > 0 ) {
-				$request_args['headers']['Range'] = "bytes={$cursor}-{$end}";
-			}
 
 			// Cache-buster to prevent LiteSpeed from serving cached probe response.
 			$sep = str_contains( $this->url, '?' ) ? '&' : '?';
