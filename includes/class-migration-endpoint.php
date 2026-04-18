@@ -200,11 +200,14 @@ class EWPM_Migration_Endpoint {
 		header( 'Content-Type: application/octet-stream' );
 		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
 		header( 'Accept-Ranges: bytes' );
-		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
+		header( 'Cache-Control: no-cache, no-store, must-revalidate, private' );
 		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
 		header( 'X-Robots-Tag: noindex, nofollow' );
-		// Prevent LiteSpeed/nginx from intercepting Range handling.
-		header( 'X-LiteSpeed-Cache-Control: no-cache' );
+		// Prevent LiteSpeed/nginx from caching or intercepting Range.
+		header( 'X-LiteSpeed-Cache-Control: no-cache, no-store' );
+		header( 'X-LiteSpeed-Purge: *' );
+		header( 'X-LiteSpeed-Tag: ewpm_migrate' );
 		header( 'X-Accel-Buffering: no' );
 
 		// Parse Range header.

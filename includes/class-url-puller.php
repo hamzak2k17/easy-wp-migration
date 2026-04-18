@@ -63,8 +63,12 @@ class EWPM_URL_Puller {
 			return $fail( 'ssrf_blocked', $ssrf );
 		}
 
-		// Probe with a tiny Range request.
-		$response = wp_remote_get( $this->url, [
+		// Probe with a tiny Range request. Add cache-buster to avoid
+		// LiteSpeed caching this response for subsequent full downloads.
+		$sep = str_contains( $this->url, '?' ) ? '&' : '?';
+		$probe_url = $this->url . $sep . '_probe=' . time();
+
+		$response = wp_remote_get( $probe_url, [
 			'timeout'    => 15,
 			'sslverify'  => ! ( defined( 'EWPM_PULL_ALLOW_INSECURE_SSL' ) && EWPM_PULL_ALLOW_INSECURE_SSL ),
 			'user-agent' => 'EasyWPMigration/' . EWPM_VERSION,
