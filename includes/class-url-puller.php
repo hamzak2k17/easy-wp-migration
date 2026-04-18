@@ -113,18 +113,24 @@ class EWPM_URL_Puller {
 		while ( microtime( true ) < $deadline ) {
 			$end = $cursor + $chunk_size - 1;
 
+			// Stream directly to a temp chunk file, then append to destination.
+			$chunk_tmp = $this->destination . '.chunk';
+
 			$response = wp_remote_get( $this->url, [
 				'timeout'    => min( 30, max( 5, (int) ( $deadline - microtime( true ) ) ) ),
 				'sslverify'  => ! ( defined( 'EWPM_PULL_ALLOW_INSECURE_SSL' ) && EWPM_PULL_ALLOW_INSECURE_SSL ),
 				'user-agent' => 'EasyWPMigration/' . EWPM_VERSION,
 				'headers'    => [
 					'Range'           => "bytes={$cursor}-{$end}",
-					'Accept-Encoding' => 'identity', // Prevent gzip — conflicts with Range.
+					'Accept-Encoding' => 'identity',
 				],
 				'decompress' => false,
+				'stream'     => true,
+				'filename'   => $chunk_tmp,
 			] );
 
 			if ( is_wp_error( $response ) ) {
+				@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				return [
 					'cursor'        => $cursor,
 					'bytes_written' => $total_written,
@@ -137,6 +143,7 @@ class EWPM_URL_Puller {
 			$code = wp_remote_retrieve_response_code( $response );
 
 			if ( 429 === $code ) {
+				@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				return [
 					'cursor'        => $cursor,
 					'bytes_written' => $total_written,
@@ -147,6 +154,7 @@ class EWPM_URL_Puller {
 			}
 
 			if ( $code >= 400 ) {
+				@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				$error_code = match ( true ) {
 					401 === $code, 403 === $code => 'unauthorized',
 					404 === $code => 'not_found',
@@ -163,10 +171,11 @@ class EWPM_URL_Puller {
 				];
 			}
 
-			$body = wp_remote_retrieve_body( $response );
+			// Read chunk from temp file, append to destination.
+			$chunk_bytes = file_exists( $chunk_tmp ) ? (int) filesize( $chunk_tmp ) : 0;
 
-			if ( empty( $body ) ) {
-				// Empty body at valid status — likely EOF.
+			if ( 0 === $chunk_bytes ) {
+				@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				return [
 					'cursor'        => $cursor,
 					'bytes_written' => $total_written,
@@ -176,7 +185,10 @@ class EWPM_URL_Puller {
 				];
 			}
 
-			// Write to file.
+			// Append chunk to destination.
+			$chunk_data = file_get_contents( $chunk_tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+			@unlink( $chunk_tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+
 			$fh = fopen( $this->destination, 'ab' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 
 			if ( ! $fh ) {
@@ -189,27 +201,13 @@ class EWPM_URL_Puller {
 				];
 			}
 
-			// Verify file offset matches cursor.
-			$file_size = (int) fstat( $fh )['size'];
-
-			if ( $file_size !== $cursor ) {
-				fclose( $fh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
-				return [
-					'cursor'        => $cursor,
-					'bytes_written' => $total_written,
-					'done'          => false,
-					'error'         => sprintf( 'File offset mismatch: expected %d, got %d.', $cursor, $file_size ),
-					'error_code'    => 'size_mismatch',
-				];
-			}
-
-			fwrite( $fh, $body );
+			fwrite( $fh, $chunk_data );
 			fflush( $fh );
 			fclose( $fh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 
-			$chunk_bytes    = strlen( $body );
 			$cursor        += $chunk_bytes;
 			$total_written += $chunk_bytes;
+			unset( $chunk_data );
 
 			// If we got fewer bytes than requested, we've reached EOF.
 			if ( $chunk_bytes < $chunk_size ) {
@@ -221,8 +219,6 @@ class EWPM_URL_Puller {
 					'error_code'    => null,
 				];
 			}
-
-			unset( $body );
 		}
 
 		return [
