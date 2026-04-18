@@ -217,8 +217,13 @@ class EWPM_Migration_Endpoint {
 			$start = '' !== $m[1] ? (int) $m[1] : 0;
 			$end   = '' !== $m[2] ? (int) $m[2] : $file_size - 1;
 
+			// Clamp end to file boundary (RFC 7233: if end >= size, use size-1).
+			if ( $end >= $file_size ) {
+				$end = $file_size - 1;
+			}
+
 			// Validate range.
-			if ( $start > $end || $start >= $file_size || $end >= $file_size ) {
+			if ( $start > $end || $start >= $file_size ) {
 				status_header( 416 ); // Range Not Satisfiable.
 				header( "Content-Range: bytes */{$file_size}" );
 				exit;
