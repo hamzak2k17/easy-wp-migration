@@ -203,6 +203,9 @@ class EWPM_Migration_Endpoint {
 		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
 		header( 'Pragma: no-cache' );
 		header( 'X-Robots-Tag: noindex, nofollow' );
+		// Prevent LiteSpeed/nginx from intercepting Range handling.
+		header( 'X-LiteSpeed-Cache-Control: no-cache' );
+		header( 'X-Accel-Buffering: no' );
 
 		// Parse Range header.
 		$range_header = $_SERVER['HTTP_RANGE'] ?? '';

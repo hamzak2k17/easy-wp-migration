@@ -115,7 +115,11 @@ class EWPM_URL_Puller {
 
 			// Use curl directly for Range requests — wp_remote_get can
 			// interfere with Range headers on some server configs.
-			$ch = curl_init( $this->url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_init
+			// Add cache-buster to prevent LiteSpeed caching probe response.
+			$sep = str_contains( $this->url, '?' ) ? '&' : '?';
+			$chunk_url = $this->url . $sep . '_chunk=' . $cursor;
+
+			$ch = curl_init( $chunk_url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_init
 			curl_setopt_array( $ch, [ // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt_array
 				CURLOPT_RETURNTRANSFER => true,
 				CURLOPT_RANGE          => "{$cursor}-{$end}",
