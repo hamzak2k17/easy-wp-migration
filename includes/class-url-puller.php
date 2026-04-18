@@ -113,36 +113,45 @@ class EWPM_URL_Puller {
 		while ( microtime( true ) < $deadline ) {
 			$end = $cursor + $chunk_size - 1;
 
-			// Use curl directly for Range requests — wp_remote_get can
-			// interfere with Range headers on some server configs.
-			// Add cache-buster to prevent LiteSpeed caching probe response.
-			$sep = str_contains( $this->url, '?' ) ? '&' : '?';
-			$chunk_url = $this->url . $sep . '_chunk=' . $cursor;
+			// Use wp_remote_get for the pull. For the first chunk (cursor=0),
+			// try without Range header to avoid LiteSpeed caching conflicts.
+			// For subsequent chunks, use Range.
+			$request_args = [
+				'timeout'    => min( 60, max( 10, (int) ( $deadline - microtime( true ) ) ) ),
+				'sslverify'  => ! ( defined( 'EWPM_PULL_ALLOW_INSECURE_SSL' ) && EWPM_PULL_ALLOW_INSECURE_SSL ),
+				'user-agent' => 'EasyWPMigration/' . EWPM_VERSION,
+				'headers'    => [ 'Accept-Encoding' => 'identity' ],
+				'decompress' => false,
+			];
 
-			$ch = curl_init( $chunk_url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_init
-			curl_setopt_array( $ch, [ // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt_array
-				CURLOPT_RETURNTRANSFER => true,
-				CURLOPT_RANGE          => "{$cursor}-{$end}",
-				CURLOPT_TIMEOUT        => min( 30, max( 5, (int) ( $deadline - microtime( true ) ) ) ),
-				CURLOPT_USERAGENT      => 'EasyWPMigration/' . EWPM_VERSION,
-				CURLOPT_FOLLOWLOCATION => true,
-				CURLOPT_MAXREDIRS      => 5,
-				CURLOPT_SSL_VERIFYPEER => ! ( defined( 'EWPM_PULL_ALLOW_INSECURE_SSL' ) && EWPM_PULL_ALLOW_INSECURE_SSL ),
-				CURLOPT_ENCODING       => 'identity',
-				CURLOPT_HTTPHEADER     => [ 'Accept-Encoding: identity' ],
-			] );
+			// Only use Range for resume (cursor > 0). First download
+			// gets the full file without Range to avoid server conflicts.
+			if ( $cursor > 0 ) {
+				$request_args['headers']['Range'] = "bytes={$cursor}-{$end}";
+			}
 
-			$body = curl_exec( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_exec
-			$code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo
-			$curl_error = curl_error( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_error
-			curl_close( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_close
+			$response = wp_remote_get( $this->url, $request_args );
 
-			if ( false === $body || ! empty( $curl_error ) ) {
+			if ( is_wp_error( $response ) ) {
 				return [
 					'cursor'        => $cursor,
 					'bytes_written' => $total_written,
 					'done'          => false,
-					'error'         => $curl_error ?: 'curl request failed',
+					'error'         => $response->get_error_message(),
+					'error_code'    => 'unreachable',
+				];
+			}
+
+			$code       = wp_remote_retrieve_response_code( $response );
+			$body       = wp_remote_retrieve_body( $response );
+			$curl_error = '';
+
+			if ( false === $body ) {
+				return [
+					'cursor'        => $cursor,
+					'bytes_written' => $total_written,
+					'done'          => false,
+					'error'         => 'Empty response body',
 					'error_code'    => 'unreachable',
 				];
 			}
