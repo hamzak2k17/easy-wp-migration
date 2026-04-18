@@ -38,6 +38,10 @@ defined( 'ABSPATH' ) || exit;
 					<input type="radio" name="ewpm_import_source" value="backup">
 					<?php esc_html_e( 'Pick from server backups', 'easy-wp-migration' ); ?>
 				</label>
+				<label class="ewpm-import-source-tab">
+					<input type="radio" name="ewpm_import_source" value="url">
+					<?php esc_html_e( 'Pull from URL', 'easy-wp-migration' ); ?>
+				</label>
 			</div>
 
 			<!-- Upload panel -->
@@ -57,6 +61,25 @@ defined( 'ABSPATH' ) || exit;
 				<select id="ewpm-import-backup-select" class="regular-text">
 					<option value=""><?php esc_html_e( 'Loading backups...', 'easy-wp-migration' ); ?></option>
 				</select>
+			</div>
+
+			<!-- Pull from URL panel -->
+			<div id="ewpm-import-url-panel" style="display:none;">
+				<p class="description" style="margin-bottom: 10px;">
+					<?php esc_html_e( 'Paste a migration link generated on the source site\'s Backups tab.', 'easy-wp-migration' ); ?>
+				</p>
+				<p class="description" style="margin-bottom: 10px; color: #dba617;">
+					<?php esc_html_e( 'Only paste links from sources you trust. A migration link gives full access to the source site\'s database including user credentials and private data.', 'easy-wp-migration' ); ?>
+				</p>
+				<div style="display: flex; gap: 8px; align-items: center;">
+					<input type="url" id="ewpm-import-url-input" class="large-text"
+						placeholder="https://source-site.com/ewpm-migrate/TOKEN or https://source-site.com/?ewpm_migrate=TOKEN">
+					<button type="button" class="button" id="ewpm-import-url-check">
+						<?php esc_html_e( 'Check link', 'easy-wp-migration' ); ?>
+					</button>
+				</div>
+				<div id="ewpm-import-url-probe-result" style="margin-top: 10px;"></div>
+				<div id="ewpm-import-url-pull-progress" style="display:none; margin-top: 10px;"></div>
 			</div>
 		</div>
 

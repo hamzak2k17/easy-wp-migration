@@ -3,7 +3,7 @@
  * Plugin Name: Easy WP Migration
  * Plugin URI:  https://wordpress.org/plugins/easy-wp-migration/
  * Description: Lightweight site migration and backup tool. Export, import, pull from URL, and manage server-side backups.
- * Version:     0.9.0
+ * Version:     0.10.0
  * Requires at least: 6.2
  * Requires PHP: 8.1
  * Author:      DotClick LLC
@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Plugin constants.
  */
-define( 'EWPM_VERSION', '0.9.0' );
+define( 'EWPM_VERSION', '0.10.0' );
 define( 'EWPM_PLUGIN_FILE', __FILE__ );
 define( 'EWPM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EWPM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -42,6 +42,15 @@ if ( ! defined( 'EWPM_MAX_FILE_SIZE' ) ) {
 }
 if ( ! defined( 'EWPM_AUTO_SNAPSHOT_RETENTION_DAYS' ) ) {
 	define( 'EWPM_AUTO_SNAPSHOT_RETENTION_DAYS', 30 ); // Auto-snapshots older than this are cleaned up. Min 7.
+}
+if ( ! defined( 'EWPM_PULL_CHUNK_SIZE' ) ) {
+	define( 'EWPM_PULL_CHUNK_SIZE', 5 * 1024 * 1024 ); // 5 MB per Range request chunk.
+}
+if ( ! defined( 'EWPM_PULL_NO_RANGE_MAX_BYTES' ) ) {
+	define( 'EWPM_PULL_NO_RANGE_MAX_BYTES', 50 * 1024 * 1024 ); // 50 MB max for non-resumable pulls.
+}
+if ( ! defined( 'EWPM_ALLOW_PRIVATE_NETWORK_PULL' ) ) {
+	define( 'EWPM_ALLOW_PRIVATE_NETWORK_PULL', false );
 }
 
 /**

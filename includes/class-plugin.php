@@ -66,6 +66,7 @@ class EWPM_Plugin {
 		$registry->register( 'db_export', EWPM_Job_DB_Export::class );
 		$registry->register( 'export', EWPM_Job_Export::class );
 		$registry->register( 'import', EWPM_Job_Import::class );
+		$registry->register( 'url_pull', EWPM_Job_URL_Pull::class );
 	}
 
 	/**

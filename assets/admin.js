@@ -508,12 +508,93 @@
 			var radios       = document.querySelectorAll( 'input[name="ewpm_import_source"]' );
 			var uploadPanel  = document.getElementById( 'ewpm-import-upload-panel' );
 			var backupPanel  = document.getElementById( 'ewpm-import-backup-panel' );
+			var urlPanel     = document.getElementById( 'ewpm-import-url-panel' );
 
 			radios.forEach( function ( r ) {
 				r.addEventListener( 'change', function () {
 					uploadPanel.style.display = r.value === 'upload' && r.checked ? 'block' : 'none';
 					backupPanel.style.display = r.value === 'backup' && r.checked ? 'block' : 'none';
+					if ( urlPanel ) { urlPanel.style.display = r.value === 'url' && r.checked ? 'block' : 'none'; }
 				} );
+			} );
+
+			this.bindUrlPull();
+		},
+
+		bindUrlPull: function () {
+			var checkBtn   = document.getElementById( 'ewpm-import-url-check' );
+			var urlInput   = document.getElementById( 'ewpm-import-url-input' );
+			var probeResult = document.getElementById( 'ewpm-import-url-probe-result' );
+			var pullProgress = document.getElementById( 'ewpm-import-url-pull-progress' );
+
+			if ( ! checkBtn || ! urlInput ) { return; }
+
+			checkBtn.addEventListener( 'click', function () {
+				var url = urlInput.value.trim();
+
+				if ( ! url || ( ! url.startsWith( 'http://' ) && ! url.startsWith( 'https://' ) ) ) {
+					probeResult.innerHTML = '<p class="ewpm-export-result--error" style="padding:8px;">Enter a valid http:// or https:// URL.</p>';
+					return;
+				}
+
+				checkBtn.disabled = true;
+				probeResult.innerHTML = '<p>Checking link...</p>';
+
+				ajaxPost( 'ewpm_probe_migration_url', { url: url } ).then( function ( data ) {
+					checkBtn.disabled = false;
+					var html = '<div class="ewpm-dev-result ewpm-dev-result--success" style="margin-top:8px;">';
+					html += '<strong>Link is valid.</strong> ';
+					html += 'File size: ' + escHtml( data.size_human || 'unknown' );
+					if ( data.supports_range ) { html += ' (resumable)'; }
+					if ( data.filename_hint ) { html += '<br>Filename: ' + escHtml( data.filename_hint ); }
+					if ( data.disk_warning ) { html += '<br><span style="color:#dba617;">' + escHtml( data.disk_warning ) + '</span>'; }
+					html += '</div>';
+					html += '<button type="button" class="button button-primary" id="ewpm-import-url-start-pull" style="margin-top:10px;">Start Pull</button>';
+					probeResult.innerHTML = html;
+
+					document.getElementById( 'ewpm-import-url-start-pull' ).addEventListener( 'click', function () {
+						EWPM.Import.startUrlPull( url );
+					} );
+				} ).catch( function ( err ) {
+					checkBtn.disabled = false;
+					var msg = err.message || 'Unknown error';
+					probeResult.innerHTML = '<div class="ewpm-dev-result ewpm-dev-result--error" style="margin-top:8px;">' + escHtml( msg ) + '</div>';
+				} );
+			} );
+		},
+
+		startUrlPull: function ( url ) {
+			var probeResult  = document.getElementById( 'ewpm-import-url-probe-result' );
+			var pullProgress = document.getElementById( 'ewpm-import-url-pull-progress' );
+
+			probeResult.innerHTML = '';
+			pullProgress.style.display = 'block';
+			pullProgress.innerHTML     = '';
+
+			var self = this;
+
+			EWPM.Job.start( {
+				job_type: 'url_pull',
+				params: { url: url },
+
+				onProgress: function ( data ) {
+					EWPM.UI.renderProgress( pullProgress, data );
+				},
+
+				onDone: function ( result ) {
+					pullProgress.style.display = 'none';
+					self.archivePath = result.pulled_path;
+					self.loadPreview( result.pulled_path );
+				},
+
+				onError: function ( err ) {
+					pullProgress.innerHTML = '<div class="ewpm-dev-result ewpm-dev-result--error">Pull failed: ' + escHtml( err.message ) + '</div>';
+				},
+
+				onCancel: function ( data ) {
+					EWPM.UI.renderProgress( pullProgress, data );
+					pullProgress.innerHTML += '<p>Pull cancelled.</p>';
+				},
 			} );
 		},
 

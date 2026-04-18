@@ -5,6 +5,18 @@ All notable changes to Easy WP Migration will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-04-18
+
+### Added
+
+- `EWPM_URL_Puller` — pulls remote archives via resumable HTTP Range requests using WordPress HTTP API, with SSRF defense (private IP rejection via `filter_var` + `gethostbyname`), streaming writes, and granular error categorization
+- `EWPM_Job_URL_Pull` — chunked download job with phases: probe, download (with exponential backoff retries for transient errors), verify. Up to 5 retries for rate limits/timeouts, immediate fail for auth/404 errors
+- "Pull from URL" tab on Import page: paste migration link, probe validation with size/Range display, disk space warning, auto-chain into import flow after download
+- `ewpm_probe_migration_url` AJAX endpoint with SSRF defense and disk space check
+- SSRF defense: rejects URLs resolving to private/reserved IPs (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1, fc00::/7). Override via `EWPM_ALLOW_PRIVATE_NETWORK_PULL` constant
+- Constants: `EWPM_PULL_CHUNK_SIZE` (5MB), `EWPM_PULL_NO_RANGE_MAX_BYTES` (50MB), `EWPM_ALLOW_PRIVATE_NETWORK_PULL` (false)
+- Full end-to-end migration: source generates link → destination pastes link → probe → pull → auto-snapshot → import → done
+
 ## [0.9.0] — 2026-04-17
 
 ### Added

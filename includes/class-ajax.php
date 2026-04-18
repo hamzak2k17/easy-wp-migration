@@ -37,6 +37,7 @@ class EWPM_Ajax {
 		add_action( 'wp_ajax_ewpm_delete_backup', [ $this, 'handle_delete_backup' ] );
 		add_action( 'wp_ajax_ewpm_delete_backups_bulk', [ $this, 'handle_delete_backups_bulk' ] );
 		add_action( 'wp_ajax_ewpm_run_cleanup_now', [ $this, 'handle_run_cleanup_now' ] );
+		add_action( 'wp_ajax_ewpm_probe_migration_url', [ $this, 'handle_probe_migration_url' ] );
 		add_action( 'wp_ajax_ewpm_generate_migration_link', [ $this, 'handle_generate_migration_link' ] );
 		add_action( 'wp_ajax_ewpm_list_migration_links', [ $this, 'handle_list_migration_links' ] );
 		add_action( 'wp_ajax_ewpm_revoke_migration_link', [ $this, 'handle_revoke_migration_link' ] );
@@ -453,6 +454,58 @@ class EWPM_Ajax {
 			'deleted'      => $result['deleted'],
 			'freed_bytes'  => $result['freed_bytes'],
 			'freed_human'  => size_format( $result['freed_bytes'] ),
+		] );
+	}
+
+	/**
+	 * Probe a migration URL — check reachability, size, Range support.
+	 */
+	public function handle_probe_migration_url(): void {
+		$this->verify_request();
+
+		$url = esc_url_raw( trim( wp_unslash( $_POST['url'] ?? '' ) ) );
+
+		if ( empty( $url ) ) {
+			wp_send_json_error( [ 'error' => __( 'URL is required.', 'easy-wp-migration' ), 'error_code' => 'generic_error' ], 400 );
+		}
+
+		// Validate scheme.
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+
+		if ( ! in_array( $scheme, [ 'http', 'https' ], true ) ) {
+			wp_send_json_error( [ 'error' => __( 'Only http and https URLs are allowed.', 'easy-wp-migration' ), 'error_code' => 'generic_error' ], 400 );
+		}
+
+		$puller = new EWPM_URL_Puller( $url, '' );
+		$result = $puller->probe();
+
+		if ( ! $result['reachable'] ) {
+			wp_send_json_error( [
+				'error'      => $result['error'],
+				'error_code' => $result['error_code'],
+			], 400 );
+		}
+
+		// Disk space check.
+		$disk_warning = null;
+		$free_space   = @disk_free_space( WP_CONTENT_DIR ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+
+		if ( false !== $free_space && $result['size_bytes'] > 0 && $result['size_bytes'] > $free_space * 0.5 ) {
+			$disk_warning = sprintf(
+				/* translators: 1: needed, 2: available */
+				__( 'This pull will use %1$s. Available free space: %2$s. Proceeding may risk running out of disk.', 'easy-wp-migration' ),
+				size_format( $result['size_bytes'] ),
+				size_format( $free_space )
+			);
+		}
+
+		wp_send_json_success( [
+			'reachable'      => true,
+			'size_bytes'     => $result['size_bytes'],
+			'size_human'     => size_format( $result['size_bytes'] ),
+			'supports_range' => $result['supports_range'],
+			'filename_hint'  => $result['filename_hint'],
+			'disk_warning'   => $disk_warning,
 		] );
 	}
 
