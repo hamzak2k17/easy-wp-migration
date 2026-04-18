@@ -70,6 +70,9 @@ class EWPM_Job_URL_Pull extends EWPM_Job {
 	 * @return array<string,mixed> Updated state.
 	 */
 	protected function run_tick( array $state, int $time_budget_seconds ): array {
+		$debug_log = ewpm_get_tmp_dir() . 'pull-debug.log';
+		file_put_contents( $debug_log, gmdate( 'H:i:s' ) . " run_tick: phase={$state['phase']} job_id={$state['job_id']}\n", FILE_APPEND ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+
 		if ( $this->state->has_cancel_flag( $state['job_id'] ) ) {
 			$state['cancelled']      = true;
 			$state['phase_label']    = __( 'Cancelled', 'easy-wp-migration' );
@@ -179,8 +182,14 @@ class EWPM_Job_URL_Pull extends EWPM_Job {
 			return $state;
 		}
 
+		// Debug logging.
+		$debug_log = ewpm_get_tmp_dir() . 'pull-debug.log';
+		file_put_contents( $debug_log, gmdate( 'H:i:s' ) . " phase_download: url=" . substr( $url, 0, 60 ) . " dest={$dest} cursor={$cursor} chunk={$chunk_size}\n", FILE_APPEND ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+
 		$puller = new EWPM_URL_Puller( $url, $dest );
 		$result = $puller->pull_chunk( $cursor, $chunk_size, $time_budget_seconds );
+
+		file_put_contents( $debug_log, "  result: cursor={$result['cursor']} written={$result['bytes_written']} done=" . ( $result['done'] ? 'yes' : 'no' ) . " error=" . ( $result['error'] ?? 'none' ) . " code=" . ( $result['error_code'] ?? 'none' ) . "\n", FILE_APPEND ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 
 		$state['downloaded_bytes'] = $result['cursor'];
 
