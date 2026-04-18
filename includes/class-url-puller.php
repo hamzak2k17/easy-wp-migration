@@ -134,7 +134,11 @@ class EWPM_URL_Puller {
 				$request_args['headers']['Range'] = "bytes={$cursor}-{$end}";
 			}
 
-			$response = wp_remote_get( $this->url, $request_args );
+			// Cache-buster to prevent LiteSpeed from serving cached probe response.
+			$sep = str_contains( $this->url, '?' ) ? '&' : '?';
+			$pull_url = $this->url . $sep . '_pull=' . $cursor . '_' . time();
+
+			$response = wp_remote_get( $pull_url, $request_args );
 
 			if ( is_wp_error( $response ) ) {
 				return [
