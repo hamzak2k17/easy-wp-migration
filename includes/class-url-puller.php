@@ -342,9 +342,14 @@ class EWPM_URL_Puller {
 		// Resolve hostname to IP.
 		$ip = gethostbyname( $host );
 
-		if ( $ip === $host ) {
-			// gethostbyname returns the hostname on failure.
+		if ( $ip === $host && ! filter_var( $host, FILTER_VALIDATE_IP ) ) {
+			// gethostbyname returns the hostname on failure (not an IP).
 			return null; // Let wp_remote handle DNS failures.
+		}
+
+		// If host was already a numeric IP, use it directly.
+		if ( $ip === $host ) {
+			$ip = $host;
 		}
 
 		// Check against private/reserved ranges.
