@@ -23,6 +23,19 @@ foreach ( $wp_load_paths as $p ) {
 
 header( 'Content-Type: text/plain; charset=utf-8' );
 
+// Quick log reader.
+if ( ! empty( $_GET['read_log'] ) ) {
+	$log = WP_CONTENT_DIR . '/easy-wp-migration-storage/tmp/pull-debug.log';
+
+	if ( file_exists( $log ) ) {
+		echo file_get_contents( $log ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+	} else {
+		echo "Log file not found at: {$log}\n";
+	}
+
+	exit;
+}
+
 // ──────────────────────────────────────────────────────────────────
 // TEST BLOCK 3: Handler in isolation (run on test1 with ?handler_test=1)
 // ──────────────────────────────────────────────────────────────────
