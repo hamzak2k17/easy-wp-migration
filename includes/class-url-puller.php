@@ -134,9 +134,16 @@ class EWPM_URL_Puller {
 			$sep = str_contains( $this->url, '?' ) ? '&' : '?';
 			$pull_url = $this->url . $sep . '_pull=' . $cursor . '_' . time();
 
+			// Debug log for diagnosing 416 errors.
+			$debug_log = ewpm_get_tmp_dir() . 'pull-debug.log';
+			$debug_msg = gmdate( 'H:i:s' ) . " pull_chunk cursor={$cursor} end={$end} url=" . substr( $pull_url, 0, 80 ) . "\n";
+			$debug_msg .= "  headers: " . wp_json_encode( $request_args['headers'] ) . "\n";
+			file_put_contents( $debug_log, $debug_msg, FILE_APPEND ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+
 			$response = wp_remote_get( $pull_url, $request_args );
 
 			if ( is_wp_error( $response ) ) {
+				file_put_contents( $debug_log, "  WP_Error: " . $response->get_error_message() . "\n", FILE_APPEND ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				return [
 					'cursor'        => $cursor,
 					'bytes_written' => $total_written,
@@ -146,9 +153,18 @@ class EWPM_URL_Puller {
 				];
 			}
 
-			$code       = wp_remote_retrieve_response_code( $response );
-			$body       = wp_remote_retrieve_body( $response );
-			$curl_error = '';
+			$code = wp_remote_retrieve_response_code( $response );
+			$body = wp_remote_retrieve_body( $response );
+
+			$resp_headers = wp_remote_retrieve_headers( $response );
+			$debug_resp = "  response: status={$code} body_len=" . strlen( $body ) . "\n";
+			if ( $resp_headers ) {
+				foreach ( [ 'content-type', 'content-length', 'content-range', 'accept-ranges' ] as $hk ) {
+					$hv = wp_remote_retrieve_header( $response, $hk );
+					if ( $hv ) { $debug_resp .= "  {$hk}: {$hv}\n"; }
+				}
+			}
+			file_put_contents( $debug_log, $debug_resp, FILE_APPEND ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 
 			if ( false === $body ) {
 				return [
