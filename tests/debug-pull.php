@@ -23,6 +23,69 @@ foreach ( $wp_load_paths as $p ) {
 
 header( 'Content-Type: text/plain; charset=utf-8' );
 
+// Filesystem checker.
+if ( ! empty( $_GET['check_fs'] ) ) {
+	echo "=== FILESYSTEM STATE: " . ( defined( 'ABSPATH' ) ? ABSPATH : 'unknown' ) . " ===\n\n";
+
+	$wpc = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : dirname( __DIR__, 2 );
+
+	echo "--- wp-content/themes/ ---\n";
+	$td = $wpc . '/themes/';
+	if ( is_dir( $td ) ) {
+		foreach ( scandir( $td ) as $i ) { if ( $i[0] !== '.' ) echo "  " . ( is_dir( $td . $i ) ? '[DIR]' : '[FILE]' ) . " {$i}\n"; }
+	}
+
+	echo "\n--- wp-content/plugins/ ---\n";
+	$pd = $wpc . '/plugins/';
+	if ( is_dir( $pd ) ) {
+		foreach ( scandir( $pd ) as $i ) { if ( $i[0] !== '.' ) echo "  " . ( is_dir( $pd . $i ) ? '[DIR]' : '[FILE]' ) . " {$i}\n"; }
+	}
+
+	echo "\n--- wp-content/uploads/ ---\n";
+	$ud = $wpc . '/uploads/';
+	if ( is_dir( $ud ) ) {
+		$c = 0;
+		$ri = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $ud, FilesystemIterator::SKIP_DOTS ), RecursiveIteratorIterator::LEAVES_ONLY );
+		foreach ( $ri as $f ) { if ( $f->isFile() ) $c++; }
+		echo "  Total files: {$c}\n";
+		foreach ( scandir( $ud ) as $i ) { if ( $i[0] !== '.' ) echo "  " . ( is_dir( $ud . $i ) ? '[DIR]' : '[FILE]' ) . " {$i}\n"; }
+	} else {
+		echo "  NOT PRESENT\n";
+	}
+
+	echo "\n--- Job state files ---\n";
+	$tmp = $wpc . '/easy-wp-migration-storage/tmp/';
+	$jobs = glob( $tmp . 'job-*.json' );
+	if ( $jobs ) {
+		foreach ( $jobs as $jf ) {
+			$d = json_decode( file_get_contents( $jf ), true );
+			$n = basename( $jf );
+			echo "  {$n}: type={$d['type']}, phase={$d['phase']}, done=" . ( ! empty( $d['done'] ) ? 'Y' : 'N' ) . ", cancelled=" . ( ! empty( $d['cancelled'] ) ? 'Y' : 'N' ) . ", error=" . ( $d['error'] ?? 'none' ) . "\n";
+			if ( isset( $d['file_stats'] ) ) echo "    file_stats: " . json_encode( $d['file_stats'] ) . "\n";
+			if ( isset( $d['file_cursor'] ) ) echo "    file_cursor: " . $d['file_cursor'] . "\n";
+			if ( isset( $d['file_plan'] ) ) echo "    file_plan entries: " . count( $d['file_plan'] ) . "\n";
+		}
+	} else {
+		echo "  No job state files.\n";
+	}
+
+	echo "\n--- Backups ---\n";
+	$bd = $wpc . '/easy-wp-migration-storage/backups/';
+	$bk = glob( $bd . '*.ezmig' );
+	if ( $bk ) { foreach ( $bk as $b ) echo "  " . basename( $b ) . " (" . round( filesize( $b ) / 1048576, 1 ) . " MB)\n"; }
+	else echo "  None.\n";
+
+	echo "\n--- DB state ---\n";
+	if ( function_exists( 'get_option' ) ) {
+		echo "  stylesheet: " . get_option( 'stylesheet', '?' ) . "\n";
+		echo "  active_plugins: " . json_encode( get_option( 'active_plugins', [] ) ) . "\n";
+		echo "  siteurl: " . get_option( 'siteurl' ) . "\n";
+		echo "  home: " . get_option( 'home' ) . "\n";
+	}
+
+	exit;
+}
+
 // Quick log reader.
 if ( ! empty( $_GET['read_log'] ) ) {
 	$log = WP_CONTENT_DIR . '/easy-wp-migration-storage/tmp/pull-debug.log';
