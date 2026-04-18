@@ -68,7 +68,11 @@ class EWPM_URL_Puller {
 			'timeout'    => 15,
 			'sslverify'  => ! ( defined( 'EWPM_PULL_ALLOW_INSECURE_SSL' ) && EWPM_PULL_ALLOW_INSECURE_SSL ),
 			'user-agent' => 'EasyWPMigration/' . EWPM_VERSION,
-			'headers'    => [ 'Range' => 'bytes=0-0' ],
+			'headers'    => [
+				'Range'           => 'bytes=0-0',
+				'Accept-Encoding' => 'identity',
+			],
+			'decompress' => false,
 		] );
 
 		if ( is_wp_error( $response ) ) {
@@ -113,7 +117,11 @@ class EWPM_URL_Puller {
 				'timeout'    => min( 30, max( 5, (int) ( $deadline - microtime( true ) ) ) ),
 				'sslverify'  => ! ( defined( 'EWPM_PULL_ALLOW_INSECURE_SSL' ) && EWPM_PULL_ALLOW_INSECURE_SSL ),
 				'user-agent' => 'EasyWPMigration/' . EWPM_VERSION,
-				'headers'    => [ 'Range' => "bytes={$cursor}-{$end}" ],
+				'headers'    => [
+					'Range'           => "bytes={$cursor}-{$end}",
+					'Accept-Encoding' => 'identity', // Prevent gzip — conflicts with Range.
+				],
+				'decompress' => false,
 			] );
 
 			if ( is_wp_error( $response ) ) {
